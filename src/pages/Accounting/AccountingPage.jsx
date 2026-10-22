@@ -55,19 +55,43 @@ function getStoredBank() {
   catch { return DEFAULT_BANK; }
 }
 
-/* ── Office location persistence ─────────────────────────── */
-function getStoredOffices() {
+/* ── Office location persistence (backend-backed; localStorage is a fallback) ─── */
+const OFFICE_CACHE_KEY = "nnc_offices";
+
+function mergeWithDefaults(saved) {
+  return Object.fromEntries(
+    Object.keys(OFFICES).map(k => [k, { ...OFFICES[k], ...(saved?.[k] || {}) }])
+  );
+}
+
+/* Initial value used by useState — synchronous, reads cache so the UI doesn't flash. */
+function getCachedOffices() {
   try {
-    const saved = JSON.parse(localStorage.getItem("nnc_offices"));
-    if (!saved) return { ...OFFICES };
-    // Merge saved over defaults so any missing keys are filled in
-    return Object.fromEntries(
-      Object.keys(OFFICES).map(k => [k, { ...OFFICES[k], ...(saved[k] || {}) }])
-    );
+    const saved = JSON.parse(localStorage.getItem(OFFICE_CACHE_KEY));
+    return mergeWithDefaults(saved);
   } catch { return { ...OFFICES }; }
 }
-function saveStoredOffices(data) {
-  localStorage.setItem("nnc_offices", JSON.stringify(data));
+
+async function fetchOfficesFromAPI() {
+  const res  = await fetch(`${API}/api/offices`, { headers: auth() });
+  const json = await res.json();
+  if (!res.ok || !json.success) throw new Error(json.message || "Failed to load offices");
+  return mergeWithDefaults(json.data);
+}
+
+async function updateOfficeOnAPI(key, draft) {
+  const res = await fetch(`${API}/api/offices/${encodeURIComponent(key)}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", ...auth() },
+    body:    JSON.stringify(draft),
+  });
+  const json = await res.json();
+  if (!res.ok || !json.success) throw new Error(json.message || "Save failed");
+  return mergeWithDefaults(json.data);
+}
+
+function cacheOffices(data) {
+  try { localStorage.setItem(OFFICE_CACHE_KEY, JSON.stringify(data)); } catch (_) {}
 }
 
 function todayStr() { return new Date().toISOString().split("T")[0]; }
@@ -146,8 +170,9 @@ export default function AccountingPage() {
   const [form,    setForm]    = useState(() => makeEmptyForm("proforma"));
   const [bankModal,  setBankModal]   = useState(false);
   const [bankDraft,  setBankDraft]   = useState(DEFAULT_BANK);
-  const [offices,    setOffices]     = useState(getStoredOffices);
+  const [offices,    setOffices]     = useState(getCachedOffices);
   const [officeEdit, setOfficeEdit]  = useState(null); // null | { key, draft }
+  const [officeSaving, setOfficeSaving] = useState(false);
   const [gstLookupStatus, setGstLookupStatus] = useState("idle"); // idle | loading | done | error
 
   /* ── Fetch list ── */
@@ -167,6 +192,20 @@ export default function AccountingPage() {
   }, [filters]);
 
   useEffect(() => { fetchInvoices(); }, [fetchInvoices]);
+
+  /* Load offices from the backend once on mount; cache the result locally
+     so the UI is instant on the next page load. Silent on failure — the
+     cached/default values are already on screen. */
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await fetchOfficesFromAPI();
+        if (!cancelled) { setOffices(data); cacheOffices(data); }
+      } catch (_) { /* keep cached/default values */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   /* ── Open form ── */
   const openNew = (type) => {
@@ -334,12 +373,20 @@ export default function AccountingPage() {
   const openOfficeEdit = (key) => {
     setOfficeEdit({ key, draft: { ...offices[key] } });
   };
-  const saveOfficeEdit = () => {
-    const updated = { ...offices, [officeEdit.key]: { ...officeEdit.draft } };
-    setOffices(updated);
-    saveStoredOffices(updated);
-    setOfficeEdit(null);
-    toast.success(`${officeEdit.key} office updated`);
+  const saveOfficeEdit = async () => {
+    if (!officeEdit) return;
+    setOfficeSaving(true);
+    try {
+      const updated = await updateOfficeOnAPI(officeEdit.key, officeEdit.draft);
+      setOffices(updated);
+      cacheOffices(updated);
+      setOfficeEdit(null);
+      toast.success(`${officeEdit.key} office saved`);
+    } catch (e) {
+      toast.error(e.message || "Failed to save office");
+    } finally {
+      setOfficeSaving(false);
+    }
   };
 
   /* ── Render ── */
@@ -890,8 +937,11 @@ export default function AccountingPage() {
               </div>
             </div>
             <div className="ac-modal-foot">
-              <button type="button" className="ac-cancel-btn" onClick={() => setOfficeEdit(null)}>Cancel</button>
-              <button type="button" className="ac-save-btn" onClick={saveOfficeEdit}><Check size={13}/> Save Office</button>
+              <button type="button" className="ac-cancel-btn" onClick={() => setOfficeEdit(null)} disabled={officeSaving}>Cancel</button>
+              <button type="button" className="ac-save-btn" onClick={saveOfficeEdit} disabled={officeSaving}>
+                {officeSaving ? <BtnSpinner /> : <Check size={13}/>}
+                {officeSaving ? "Saving…" : "Save Office"}
+              </button>
             </div>
           </div>
         </div>

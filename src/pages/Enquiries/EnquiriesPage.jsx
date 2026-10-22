@@ -78,6 +78,15 @@ function fmtDate(d) {
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
+// Date + time, e.g. "03 Jul 2026, 12:52 PM"
+function fmtDateTime(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleString("en-IN", {
+    day: "2-digit", month: "short", year: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: true,
+  });
+}
+
 /* ═══════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════ */
@@ -100,12 +109,15 @@ function getQuoteStatusClass(s) {
 
 export default function EnquiriesPage() {
   const [activeTab, setActiveTab] = useState("enquiries"); // enquiries | quotations
+  const [enqSite, setEnqSite] = useState("nnc"); // nnc | nncdigital — which website's enquiries
   const [mode, setMode] = useState("list"); // list | form | view
   const [enquiries, setEnquiries] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [stats, setStats] = useState({
-    total: 0, byStatus: {}, byService: [], conversionRate: 0, newThisMonth: 0, todayFollowUps: 0,
+    total: 0, byStatus: {}, byService: [], conversionRate: 0, newThisMonth: 0, todayFollowUps: 0, unseen: 0,
   });
+  // Unseen (new, not-yet-viewed) enquiry counts per site — drives the tab alert badges
+  const [unseenCounts, setUnseenCounts] = useState({ nnc: 0, nncdigital: 0 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [filters, setFilters] = useState({ branch: "", status: "", source: "", service: "", landingPage: "", q: "", dateRange: "", page: 1 });
@@ -231,6 +243,7 @@ export default function EnquiriesPage() {
   /* ── Build query params from filters ── */
   function buildParams(extra = {}) {
     const p = new URLSearchParams();
+    p.set("site", enqSite);
     if (filters.branch)      p.set("branch",      filters.branch);
     if (filters.status)      p.set("status",      filters.status);
     if (filters.source)      p.set("source",      filters.source);
@@ -254,7 +267,7 @@ export default function EnquiriesPage() {
     } catch {
       toast.error("Failed to load enquiries");
     } finally { setLoading(false); }
-  }, [filters]);
+  }, [filters, enqSite]);
 
   /* ── Export CSV ── */
   const handleExport = async () => {
@@ -279,14 +292,35 @@ export default function EnquiriesPage() {
   /* ── Fetch stats ── */
   const fetchStats = useCallback(async () => {
     try {
-      const res  = await fetch(`${API}/api/enquiries/stats`, { headers: authHeader() });
+      const res  = await fetch(`${API}/api/enquiries/stats?site=${enqSite}`, { headers: authHeader() });
       const json = await res.json();
       if (json.success) setStats(json.data || stats);
+    } catch { /* silent */ }
+  }, [enqSite]);
+
+  /* ── Fetch unseen counts for BOTH tabs (drives the alert badges) ── */
+  const fetchUnseenCounts = useCallback(async () => {
+    try {
+      const [nncRes, digiRes] = await Promise.all([
+        fetch(`${API}/api/enquiries/stats?site=nnc`,        { headers: authHeader() }),
+        fetch(`${API}/api/enquiries/stats?site=nncdigital`, { headers: authHeader() }),
+      ]);
+      const [nncJson, digiJson] = await Promise.all([nncRes.json(), digiRes.json()]);
+      setUnseenCounts({
+        nnc:        nncJson.success  ? (nncJson.data.unseen  || 0) : 0,
+        nncdigital: digiJson.success ? (digiJson.data.unseen || 0) : 0,
+      });
     } catch { /* silent */ }
   }, []);
 
   useEffect(() => { fetchEnquiries(); }, [fetchEnquiries]);
   useEffect(() => { fetchStats(); }, [fetchStats]);
+  useEffect(() => { fetchUnseenCounts(); }, [fetchUnseenCounts]);
+  // Poll unseen counts every 30s so new leads alert without a manual refresh
+  useEffect(() => {
+    const id = setInterval(fetchUnseenCounts, 30000);
+    return () => clearInterval(id);
+  }, [fetchUnseenCounts]);
 
   /* ── Open helpers ── */
   const openNew = () => {
@@ -319,6 +353,17 @@ export default function EnquiriesPage() {
     setViewingEnquiry(enq);
     setNoteForm({ action: "", note: "" });
     setMode("view");
+
+    // Mark as seen (clears the glow + decrements the tab badge) if it was unseen
+    if (!enq.seen) {
+      // Optimistically update the row + badge so the UI reacts instantly
+      setEnquiries(list => list.map(e => e._id === enq._id ? { ...e, seen: true } : e));
+      setUnseenCounts(c => ({ ...c, [enqSite]: Math.max(0, (c[enqSite] || 0) - 1) }));
+      fetch(`${API}/api/enquiries/${enq._id}/seen`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+      }).catch(() => {});
+    }
   };
 
   /* ── Save ── */
@@ -331,10 +376,11 @@ export default function EnquiriesPage() {
     try {
       const method = editingId ? "PUT" : "POST";
       const url    = editingId ? `${API}/api/enquiries/${editingId}` : `${API}/api/enquiries`;
+      const payload = editingId ? formData : { ...formData, site: enqSite };
       const res    = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json", ...authHeader() },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
       const json = await res.json();
       if (json.success) {
@@ -900,6 +946,32 @@ export default function EnquiriesPage() {
               </div>
             </div>
 
+            {/* ── Site sub-tabs: Enquire NNC / Enquire NNC Digital ── */}
+            <div className="enq-site-tabs">
+              <button
+                className={`enq-site-tab${enqSite === "nnc" ? " active" : ""}`}
+                onClick={() => { setEnqSite("nnc"); setFilters(f => ({ ...f, page: 1 })); }}
+              >
+                <MessageSquare size={15} /> Enquire NNC
+                {unseenCounts.nnc > 0 && (
+                  <span className="enq-tab-badge" title={`${unseenCounts.nnc} new enquiries`}>
+                    {unseenCounts.nnc > 99 ? "99+" : unseenCounts.nnc}
+                  </span>
+                )}
+              </button>
+              <button
+                className={`enq-site-tab${enqSite === "nncdigital" ? " active" : ""}`}
+                onClick={() => { setEnqSite("nncdigital"); setFilters(f => ({ ...f, page: 1 })); }}
+              >
+                <TrendingUp size={15} /> Enquire NNC Digital
+                {unseenCounts.nncdigital > 0 && (
+                  <span className="enq-tab-badge" title={`${unseenCounts.nncdigital} new enquiries`}>
+                    {unseenCounts.nncdigital > 99 ? "99+" : unseenCounts.nncdigital}
+                  </span>
+                )}
+              </button>
+            </div>
+
             {/* KPI Strip */}
             <div className="enq-kpi-strip">
               <div className="enq-kpi-item">
@@ -1040,8 +1112,11 @@ export default function EnquiriesPage() {
                       </thead>
                       <tbody>
                         {enquiries.map((enq, idx) => (
-                          <tr key={enq._id}>
-                            <td>{(filters.page - 1) * 20 + idx + 1}</td>
+                          <tr key={enq._id} className={!enq.seen ? "enq-row-unseen" : ""}>
+                            <td>
+                              {!enq.seen && <span className="enq-new-dot" title="New enquiry" />}
+                              {(filters.page - 1) * 20 + idx + 1}
+                            </td>
                             <td>
                               <div className="enq-name">{enq.name}</div>
                               <div className="enq-phone">{enq.phone}</div>
@@ -1083,7 +1158,11 @@ export default function EnquiriesPage() {
                             </td>
                             <td>
                               <div className="enq-actions">
-                                <button className="enq-btn-icon" title="View" onClick={() => openView(enq)}>
+                                <button
+                                  className={`enq-btn-icon${!enq.seen ? " enq-view-glow" : ""}`}
+                                  title={enq.seen ? "View" : "New — click to view"}
+                                  onClick={() => openView(enq)}
+                                >
                                   <Eye size={15} />
                                 </button>
                                 <button className="enq-btn-icon" title="Edit" onClick={() => openEdit(enq)}>
@@ -1424,7 +1503,7 @@ export default function EnquiriesPage() {
                     </div>
                     <div className="enq-detail-field">
                       <div className="enq-detail-field-label">Created</div>
-                      <div className="enq-detail-field-val">{fmtDate(viewingEnquiry.createdAt)}</div>
+                      <div className="enq-detail-field-val">{fmtDateTime(viewingEnquiry.createdAt)}</div>
                     </div>
                     {viewingEnquiry.requirements && (
                       <div className="enq-detail-field">
@@ -1451,7 +1530,7 @@ export default function EnquiriesPage() {
                               {log.note && <div className="enq-activity-note">{log.note}</div>}
                               <div className="enq-activity-meta">
                                 {log.by && <span>{log.by} · </span>}
-                                {fmtDate(log.date || log.createdAt)}
+                                {fmtDateTime(log.at || log.date || log.createdAt)}
                               </div>
                             </div>
                           </div>

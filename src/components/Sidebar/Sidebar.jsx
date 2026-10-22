@@ -49,14 +49,24 @@ export default function Sidebar() {
     const fetchCount = async () => {
       try {
         const token = localStorage.getItem("nnc_token");
-        const res = await fetch(`${API_BASE}/api/enquiries?status=new&limit=1`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        const json = await res.json();
-        if (json?.success) setNewEnquiryCount(json.total || 0);
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        // Unseen (new, not-yet-viewed) enquiries across BOTH sites — matches the
+        // alert badges on the Enquiries tabs.
+        const [nncRes, digiRes] = await Promise.all([
+          fetch(`${API_BASE}/api/enquiries/stats?site=nnc`,        { headers }),
+          fetch(`${API_BASE}/api/enquiries/stats?site=nncdigital`, { headers }),
+        ]);
+        const [nncJson, digiJson] = await Promise.all([nncRes.json(), digiRes.json()]);
+        const total =
+          (nncJson?.success  ? (nncJson.data.unseen  || 0) : 0) +
+          (digiJson?.success ? (digiJson.data.unseen || 0) : 0);
+        setNewEnquiryCount(total);
       } catch { /* silent */ }
     };
     fetchCount();
+    // Poll every 30s so new leads alert on the sidebar without navigating
+    const id = setInterval(fetchCount, 30000);
+    return () => clearInterval(id);
   }, [location.pathname]);
 
   /* Close drawer on route change, but restore sidebar scroll position */
@@ -204,6 +214,7 @@ export default function Sidebar() {
                     key={item.path}
                     icon={item.icon}
                     label={item.label}
+                    badge={item.badge}
                     active={isActive(item.path)}
                     onClick={() => goTo(item.path)}
                   />

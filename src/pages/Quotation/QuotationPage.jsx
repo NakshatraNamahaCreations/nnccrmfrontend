@@ -1117,8 +1117,8 @@ export default function QuotationPage() {
 
   /* ─── Save quotation ─── */
   const handleSave = async (e) => {
-    e.preventDefault();
-    if (!formData.clientName.trim()) { toast.error("Client name is required"); return; }
+    if (e?.preventDefault) e.preventDefault();
+    if (!formData.clientName.trim()) { toast.error("Client name is required"); return null; }
     setSaving(true);
     try {
       const url    = editingId ? `${API}/api/quotations/${editingId}` : `${API}/api/quotations`;
@@ -1132,31 +1132,82 @@ export default function QuotationPage() {
         json = await res.json();
       }
       if (json.success) {
-        toast.success(editingId ? "Quotation updated" : "Quotation created");
-        backToList();
-        fetchQuotations(); fetchStats();
-      } else { toast.error(json.message || "Save failed"); }
-    } catch { toast.error("Save failed"); }
+        const baseMsg = editingId ? "Quotation updated" : "Quotation created";
+        if (json.data?.clientEmail) {
+          if (json.emailSent) {
+            toast.success(`${baseMsg} — emailed to ${json.data.clientEmail}`);
+          } else if (json.emailError) {
+            toast.error(`${baseMsg}, but email failed: ${json.emailError}`, { duration: 8000 });
+          } else {
+            toast.success(baseMsg);
+          }
+        } else {
+          toast.success(baseMsg);
+        }
+        return json.data;
+      }
+      toast.error(json.message || "Save failed");
+      return null;
+    } catch { toast.error("Save failed"); return null; }
     finally { setSaving(false); }
+  };
+
+  /* ─── Save & Send Mail (form button) ─── */
+  const handleSaveAndSend = async (e) => {
+    if (e?.preventDefault) e.preventDefault();
+    if (!formData.clientEmail?.trim()) { toast.error("Client email is required to send mail"); return; }
+    if (!formData.senderEmail?.trim()) { toast.error("Your email (replies go here) is required"); return; }
+    const saved = await handleSave();
+    if (!saved?._id) return;
+    await handleSendEmail(saved._id);
+    backToList();
+    fetchQuotations(); fetchStats();
+  };
+
+  /* ─── Save only (form submit) ─── */
+  const handleSaveOnly = async (e) => {
+    const saved = await handleSave(e);
+    if (saved) { backToList(); fetchQuotations(); fetchStats(); }
   };
 
   /* ─── Send email ─── */
   const handleSendEmail = async (id) => {
     setSending(true);
+    // Client-side timeout — if the backend hangs (e.g. SMTP stuck), abort after 45s
+    // so the button doesn't stay on "Sending..." forever.
+    const ctrl    = new AbortController();
+    const timerId = setTimeout(() => ctrl.abort(), 45000);
     try {
-      const res  = await fetch(`${API}/api/quotations/${id}/send`, { method: "POST", headers: authHeader() });
-      const json = await res.json();
-      if (json.success) {
-        toast.success(json.emailSent ? "Quotation emailed to client" : json.message);
+      const res = await fetch(`${API}/api/quotations/${id}/send`, {
+        method:  "POST",
+        headers: authHeader(),
+        signal:  ctrl.signal,
+      });
+      let json = {};
+      try { json = await res.json(); } catch { /* non-JSON response */ }
+
+      if (res.ok && json.success && json.emailSent) {
+        toast.success(json.message || "Quotation emailed to client");
         if (viewing?._id === id) {
           const r2 = await fetch(`${API}/api/quotations/${id}`, { headers: authHeader() });
           const j2 = await r2.json();
           if (j2.success) setViewing(j2.data);
         }
         fetchQuotations(); fetchStats();
-      } else toast.error(json.message || "Email failed");
-    } catch { toast.error("Email failed"); }
-    finally { setSending(false); }
+      } else {
+        // Show the actual server error (includes underlying SMTP code/response now)
+        toast.error(json.message || `Email failed (HTTP ${res.status})`, { duration: 8000 });
+      }
+    } catch (err) {
+      if (err.name === "AbortError") {
+        toast.error("Email is taking too long — the SMTP server isn't responding. Check Render env vars (EMAIL_USER / GMAIL_APP_PASS).", { duration: 10000 });
+      } else {
+        toast.error(`Email failed: ${err.message || "network error"}`, { duration: 8000 });
+      }
+    } finally {
+      clearTimeout(timerId);
+      setSending(false);
+    }
   };
 
   /* ─── Update status ─── */
@@ -1568,7 +1619,7 @@ export default function QuotationPage() {
 
         {/* ══ FORM MODE ══ */}
         {mode === "form" && (
-          <form className="qt-form" onSubmit={handleSave}>
+          <form className="qt-form" onSubmit={handleSaveOnly}>
             <div className="qt-form-body">
 
               {/* Enquiry Search */}
@@ -1636,7 +1687,30 @@ export default function QuotationPage() {
                     <input value={formData.clientPhone} onChange={e => setFormData(f => ({ ...f, clientPhone: e.target.value }))} placeholder="+91 98765 43210" />
                   </div>
                   <div className="qt-field">
-                    <label>Email</label>
+                    <label style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span>Email</span>
+                      <button
+                        type="button"
+                        disabled={saving || sending || !formData.clientEmail?.trim()}
+                        onClick={handleSaveAndSend}
+                        title={
+                          !formData.clientEmail?.trim()
+                            ? "Enter client email first"
+                            : `Save and send to ${formData.clientEmail}${formData.senderEmail ? ` (CC: ${formData.senderEmail})` : ""}`
+                        }
+                        style={{
+                          display: "inline-flex", alignItems: "center", gap: 4,
+                          padding: "3px 9px", borderRadius: 6, border: "none",
+                          background: !formData.clientEmail?.trim() ? "#e2e8f0" : "linear-gradient(135deg,#2563eb,#7c3aed)",
+                          color: !formData.clientEmail?.trim() ? "#94a3b8" : "#fff",
+                          fontSize: 11, fontWeight: 700, cursor: !formData.clientEmail?.trim() ? "not-allowed" : "pointer",
+                          textTransform: "uppercase", letterSpacing: ".3px",
+                        }}
+                      >
+                        {sending ? <RefreshCcw size={11} className="qt-spin" /> : <Send size={11} />}
+                        {sending ? "Sending" : "Send Now"}
+                      </button>
+                    </label>
                     <input type="email" value={formData.clientEmail} onChange={e => setFormData(f => ({ ...f, clientEmail: e.target.value }))} placeholder="client@example.com" />
                   </div>
                   <div className="qt-field">
@@ -1756,9 +1830,20 @@ export default function QuotationPage() {
 
             <div className="qt-form-footer">
               <button type="button" className="qt-btn-ghost" onClick={backToList}>Cancel</button>
-              <button type="submit" className="qt-btn-prim" disabled={saving}>
+              <button type="submit" className="qt-btn-prim" disabled={saving || sending}>
                 {saving ? <RefreshCcw size={14} className="qt-spin" /> : <CheckCircle2 size={14} />}
                 {saving ? "Saving..." : editingId ? "Update Quotation" : "Create Quotation"}
+              </button>
+              <button
+                type="button"
+                className="qt-btn-prim"
+                disabled={saving || sending}
+                onClick={handleSaveAndSend}
+                title="Save the quotation and email it to the client (CC to your email)"
+                style={{ background: "#2563eb" }}
+              >
+                {sending ? <RefreshCcw size={14} className="qt-spin" /> : <Send size={14} />}
+                {sending ? "Sending..." : saving ? "Saving..." : "Save & Send Mail"}
               </button>
             </div>
           </form>
@@ -1775,12 +1860,26 @@ export default function QuotationPage() {
                 {viewing.isRevision && <span className="qt-rev-badge">Revision {viewing.revisionNumber}</span>}
               </div>
               <div className="qt-workflow-actions">
-                {/* Send email */}
-                {viewing.clientEmail && viewing.status === "draft" && (
-                  <button className="qt-wf-btn blue" disabled={sending} onClick={() => handleSendEmail(viewing._id)}>
-                    <Send size={13} /> {sending ? "Sending..." : "Send to Client"}
-                  </button>
-                )}
+                {/* Send email — prominent primary action */}
+                <button
+                  className="qt-wf-btn primary"
+                  disabled={sending}
+                  onClick={() => {
+                    if (!viewing.clientEmail) {
+                      toast.error("Client email is missing — add it via Edit before sending.");
+                      openEdit(viewing);
+                      return;
+                    }
+                    handleSendEmail(viewing._id);
+                  }}
+                  title={viewing.clientEmail
+                    ? `Send to ${viewing.clientEmail}${viewing.senderEmail ? ` (CC: ${viewing.senderEmail})` : ""}`
+                    : "Client email missing — opens edit form"}
+                >
+                  <Send size={14} /> {sending
+                    ? "Sending..."
+                    : (viewing.status === "draft" ? "Send Email to Client" : "Resend Email to Client")}
+                </button>
                 {/* Status transitions */}
                 {viewing.status === "sent" && (
                   <>

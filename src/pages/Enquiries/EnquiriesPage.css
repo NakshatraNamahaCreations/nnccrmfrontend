@@ -177,8 +177,13 @@
 .enq-table-head-title { font-size: 14px; font-weight: 700; color: #0f172a; }
 .enq-table-head-count { font-size: 12px; color: #94a3b8; margin-left: 6px; }
 
-.enq-table-wrap { overflow-x: auto; }
-.enq-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.enq-table-wrap { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+/* min-width ensures the table scrolls (not clips) when the viewport is narrow */
+.enq-table { width: 100%; min-width: 940px; border-collapse: collapse; font-size: 13px; }
+/* Keep the last column (Actions) from being clipped at the right edge */
+.enq-table th:last-child,
+.enq-table td:last-child { padding-right: 20px; white-space: nowrap; text-align: left; }
+.enq-actions { flex-wrap: nowrap; }
 .enq-table th {
   padding: 10px 14px; text-align: left; font-size: 10px; font-weight: 800;
   color: #94a3b8; text-transform: uppercase; letter-spacing: .7px;
@@ -720,6 +725,87 @@
 }
 .enq-tab-btn:hover { color: #1e293b; }
 .enq-tab-btn.active { color: #7c3aed; border-bottom-color: #7c3aed; background: #faf5ff; }
+
+/* ── Site sub-tabs (Enquire NNC / Enquire NNC Digital) ── */
+.enq-site-tabs {
+  display: flex; gap: 8px;
+  padding: 0 24px; margin: 4px 0 16px;
+  flex-wrap: wrap;
+}
+.enq-site-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 18px; border: 1.5px solid #e2e8f0;
+  background: #fff; color: #64748b;
+  font-size: 13px; font-weight: 700; cursor: pointer;
+  border-radius: 999px;
+  transition: all .15s;
+}
+.enq-site-tab:hover { color: #1e293b; border-color: #cbd5e1; }
+.enq-site-tab.active {
+  color: #fff;
+  background: linear-gradient(135deg, #6d28d9, #2563eb);
+  border-color: transparent;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, .28);
+}
+
+/* ── New-lead alert badge on tabs ── */
+.enq-tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 6px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, .6);
+  animation: enq-badge-pulse 1.8s ease-out infinite;
+}
+.enq-site-tab.active .enq-tab-badge {
+  background: #fff;
+  color: #dc2626;
+  box-shadow: 0 0 0 0 rgba(255, 255, 255, .7);
+}
+@keyframes enq-badge-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(239, 68, 68, .55); }
+  70%  { box-shadow: 0 0 0 7px rgba(239, 68, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+/* ── Unseen enquiry row highlight + "new" dot ── */
+.enq-row-unseen {
+  background: linear-gradient(90deg, rgba(37, 99, 235, .06), rgba(37, 99, 235, 0) 60%);
+}
+.enq-new-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #2563eb;
+  margin-right: 7px;
+  vertical-align: middle;
+  animation: enq-dot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes enq-dot-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: .45; transform: scale(1.25); }
+}
+
+/* ── Glowing View (eye) button until the lead is viewed ── */
+.enq-view-glow {
+  color: #2563eb !important;
+  border-color: #2563eb !important;
+  animation: enq-view-glow-anim 1.5s ease-in-out infinite;
+}
+@keyframes enq-view-glow-anim {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, .5); }
+  50%      { box-shadow: 0 0 0 6px rgba(37, 99, 235, 0); }
+}
 
 /* ═══════════════════════════════════════════════
    QUOTATION STATUS BADGES

@@ -634,15 +634,43 @@ export default function AllLeads() {
                     </div>
                   </div>
                   {editForm.gstApplicable && (
-                    <div className="fg">
-                      <label>GST Rate (%)</label>
-                      <select value={editForm.gstRate} onChange={e => setEditForm(p => ({...p, gstRate: Number(e.target.value)}))}>
-                        <option value={5}>5%</option>
-                        <option value={12}>12%</option>
-                        <option value={18}>18%</option>
-                        <option value={28}>28%</option>
-                      </select>
-                    </div>
+                    <>
+                      <div className="fg">
+                        <label>GST Rate (%)</label>
+                        <select value={editForm.gstRate} onChange={e => setEditForm(p => ({...p, gstRate: Number(e.target.value)}))}>
+                          <option value={5}>5%</option>
+                          <option value={12}>12%</option>
+                          <option value={18}>18%</option>
+                          <option value={28}>28%</option>
+                        </select>
+                      </div>
+                      <div className="fg">
+                        <label>GST Amount (₹)</label>
+                        <input
+                          type="text"
+                          readOnly
+                          className="alReadOnly"
+                          value={
+                            editForm.value !== "" && !Number.isNaN(Number(editForm.value))
+                              ? Math.round((Number(editForm.value) * Number(editForm.gstRate || 0)) / 100).toLocaleString("en-IN")
+                              : ""
+                          }
+                        />
+                      </div>
+                      <div className="fg full">
+                        <label>Final Amount (incl. GST) (₹)</label>
+                        <input
+                          type="text"
+                          readOnly
+                          className="alReadOnly alGstTotal"
+                          value={
+                            editForm.value !== "" && !Number.isNaN(Number(editForm.value))
+                              ? Math.round(Number(editForm.value) * (1 + Number(editForm.gstRate || 0) / 100)).toLocaleString("en-IN")
+                              : ""
+                          }
+                        />
+                      </div>
+                    </>
                   )}
                   <div className="fg full"><label>Requirements</label><textarea value={editForm.requirements} onChange={e => setEditForm(p => ({ ...p, requirements: e.target.value }))} rows={3}/></div>
                 </div>
