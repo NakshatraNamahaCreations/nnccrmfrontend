@@ -4,6 +4,7 @@ import LeadDrawer from "../../Leads/LeadDrawer";
 import ClientHistoryDrawer from "./ClientHistoryDrawer";
 import { Download, Eye, Search, X, RefreshCcw, PlusCircle, History } from "lucide-react";
 import { toast } from "../../utils/toast";
+import { calcGst } from "../../Leads/gst";
 import "./PaymentTracker.css";
 import "./ClientHistoryDrawer.css";
 
@@ -82,22 +83,31 @@ export default function PaymentTracker() {
       const json = await res.json();
       if (!res.ok || !json?.success) throw new Error(json?.message || "Failed");
 
-      const mapped = (json.data || []).map((x) => ({
-        id:               x._id,
-        name:             x.name || "-",
-        phone:            x.phone || "-",
-        business:         x.business || "-",
-        branch:           x.branch || "-",
-        stage:            x.stage || "-",
-        rep:              x.rep || "-",
-        value:            Number(x.value || 0),
-        advanceReceived:  Number(x.advanceReceived || 0),
-        remaining:        Math.max(0, Number(x.value || 0) - Number(x.advanceReceived || 0)),
-        onboardedDate:    x.onboardedDate || null,
-        projectCompleted: Boolean(x.projectCompleted),
-        createdAt:        x.createdAt || null,
-        payStatus:        getPayStatus(x.value, x.advanceReceived),
-      }));
+      const mapped = (json.data || []).map((x) => {
+        // value = amount before GST; the client owes value + GST when GST applies
+        const g = calcGst(x.value, x.gstApplicable, x.gstRate || 18);
+        const advance = Number(x.advanceReceived || 0);
+        return {
+          id:               x._id,
+          name:             x.name || "-",
+          phone:            x.phone || "-",
+          business:         x.business || "-",
+          branch:           x.branch || "-",
+          stage:            x.stage || "-",
+          rep:              x.rep || "-",
+          value:            g.base,
+          gstApplicable:    Boolean(x.gstApplicable),
+          gstRate:          g.rate,
+          gstAmount:        g.gst,
+          totalWithGst:     g.total,
+          advanceReceived:  advance,
+          remaining:        Math.max(0, g.total - advance),
+          onboardedDate:    x.onboardedDate || null,
+          projectCompleted: Boolean(x.projectCompleted),
+          createdAt:        x.createdAt || null,
+          payStatus:        getPayStatus(g.total, advance),
+        };
+      });
 
       setRows(mapped);
     } catch (e) {
@@ -158,6 +168,8 @@ export default function PaymentTracker() {
 
   const totals = useMemo(() => ({
     agreed:    filtered.reduce((a, b) => a + b.value, 0),
+    gst:       filtered.reduce((a, b) => a + b.gstAmount, 0),
+    withGst:   filtered.reduce((a, b) => a + b.totalWithGst, 0),
     advance:   filtered.reduce((a, b) => a + b.advanceReceived, 0),
     remaining: filtered.reduce((a, b) => a + b.remaining, 0),
     paid:      filtered.filter((r) => r.payStatus === "paid").length,
@@ -168,10 +180,10 @@ export default function PaymentTracker() {
   const handleExport = () => {
     try {
       setExporting(true);
-      const headers = ["Name","Phone","Business","Branch","Stage","Rep","Total Amount","Advance","Remaining","Pay Status","Onboarded","Project Done"];
+      const headers = ["Name","Phone","Business","Branch","Stage","Rep","Amount (excl. GST)","GST %","GST Amount","Total (incl. GST)","Advance","Remaining","Pay Status","Onboarded","Project Done"];
       const csv = [headers.join(","), ...filtered.map((r) =>
         [r.name, r.phone, r.business, r.branch, r.stage, r.rep,
-         r.value, r.advanceReceived, r.remaining,
+         r.value, r.gstApplicable ? r.gstRate : 0, r.gstAmount, r.totalWithGst, r.advanceReceived, r.remaining,
          STATUS_LABEL[r.payStatus] || "-", fmtDate(r.onboardedDate), r.projectCompleted ? "Yes" : "No",
         ].map((v) => `"${v}"`).join(",")
       )].join("\n");
@@ -230,7 +242,8 @@ export default function PaymentTracker() {
   const openPayModal = (e, row) => {
     e.stopPropagation();
     setPayForm({ amount: "", date: new Date().toISOString().slice(0,10), mode: "NEFT", account: acctFilter || "", transactionId: "", note: "" });
-    setPayModal(row);
+    // The amount the client owes is the GST-inclusive total
+    setPayModal({ ...row, value: row.totalWithGst });
     setTimeout(() => amtRef.current?.focus(), 80);
   };
 
@@ -300,7 +313,8 @@ export default function PaymentTracker() {
           {/* ── Summary cards ── */}
           <div className="ptSummaryRow">
             {[
-              { label: "Total Agreed",      val: money(totals.agreed),    accent: "blue"   },
+              { label: "Total Agreed (incl. GST)", val: money(totals.withGst), accent: "blue",
+                sub: `${money(totals.agreed)} + GST ${money(totals.gst)}` },
               { label: "Advance Received",  val: money(totals.advance),   accent: "green"  },
               { label: "Remaining Balance", val: money(totals.remaining), accent: "red"    },
               { label: "Fully Paid",        val: totals.paid,             accent: "teal"   },
@@ -310,6 +324,7 @@ export default function PaymentTracker() {
               <div key={c.label} className={`ptSumCard ${c.accent}`}>
                 <div className="ptSumLabel">{c.label}</div>
                 <div className="ptSumValue">{c.val}</div>
+                {c.sub && <div className="ptSumSub">{c.sub}</div>}
               </div>
             ))}
           </div>
@@ -452,7 +467,9 @@ export default function PaymentTracker() {
                     <th>Branch</th>
                     <th>Stage</th>
                     <th>Rep</th>
-                    <th>Total Amount</th>
+                    <th>Amount (excl. GST)</th>
+                    <th>GST</th>
+                    <th>Total (incl. GST)</th>
                     <th>Advance Rec'd</th>
                     <th>Remaining</th>
                     <th>Pay Status</th>
@@ -461,7 +478,7 @@ export default function PaymentTracker() {
                 </thead>
                 <tbody>
                   {!loading && filtered.length === 0 && (
-                    <tr><td colSpan={12} className="ptEmpty">No records found.</td></tr>
+                    <tr><td colSpan={14} className="ptEmpty">No records found.</td></tr>
                   )}
                   {paginated.map((r, idx) => (
                     <tr key={r.id} className="ptRow" onClick={() => { setSelectedId(r.id); setDrawerOpen(true); }}>
@@ -479,7 +496,21 @@ export default function PaymentTracker() {
                       <td><span className={`ptPill branch ${cls(r.branch)}`}>{r.branch}</span></td>
                       <td><span className={`ptPill stage ${cls(r.stage)}`}>{r.stage}</span></td>
                       <td>{r.rep}</td>
-                      <td className="ptAmtTotal">{money(r.value)}</td>
+                      <td className="ptAmtBase">{money(r.value)}</td>
+                      <td className="ptAmtGst">
+                        {r.gstApplicable ? (
+                          <>
+                            {money(r.gstAmount)}
+                            <div className="ptGstRate">{r.gstRate}%</div>
+                          </>
+                        ) : (
+                          <>
+                            <span className="ptDash">₹0</span>
+                            <div className="ptGstRate none">No GST</div>
+                          </>
+                        )}
+                      </td>
+                      <td className="ptAmtTotal">{money(r.totalWithGst)}</td>
                       <td className="ptAmtAdv">
                         {r.advanceReceived > 0 ? money(r.advanceReceived) : <span className="ptDash">-</span>}
                       </td>

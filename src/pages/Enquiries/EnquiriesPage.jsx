@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Plus, Search, Eye, Edit2, ArrowRightCircle, Trash2,
   ChevronLeft, ChevronRight, RefreshCcw, MessageSquare,
   Calendar, TrendingUp, Clock, Activity, Download,
-  FileText, CheckCircle, XCircle, Send, IndianRupee,
+  FileText, CheckCircle, XCircle, Send, IndianRupee, AlertTriangle, CalendarPlus,
 } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
+import FollowUpModal from "./FollowUpModal";
+import ProposalModal from "./ProposalModal";
+import LostModal from "./LostModal";
+import { PROPOSAL_STATUS_META, proposalLabel } from "./proposalStatus";
 import { toast } from "../../utils/toast";
 import "./EnquiriesPage.css";
 
@@ -87,11 +92,68 @@ function fmtDateTime(d) {
   });
 }
 
+/* ── Follow-up date helpers ───────────────────────── */
+const pad2 = (n) => String(n).padStart(2, "0");
+// Local calendar date as YYYY-MM-DD (what <input type="date"> uses)
+function ymd(d) {
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+}
+// Follow-up dates are stored as UTC midnight of the picked day
+const fuKey = (d) => (d ? String(d).split("T")[0] : "");
+
+// "overdue" | "today" | "upcoming" | "" — closed enquiries never count
+function followUpState(enq) {
+  const key = fuKey(enq.followUpDate);
+  if (!key || enq.status === "won" || enq.status === "lost") return "";
+  const today = ymd(new Date());
+  if (key < today) return "overdue";
+  if (key === today) return "today";
+  return "upcoming";
+}
+
+const FOLLOW_UP_VIEWS = [
+  { key: "",         label: "All" },
+  { key: "today",    label: "Today's Follow-ups", stat: "todayFollowUps" },
+  { key: "overdue",  label: "Overdue",            stat: "overdueFollowUps" },
+  { key: "upcoming", label: "Upcoming",           stat: "upcomingFollowUps" },
+];
+
+const PAGE_SIZE = 10; // enquiries per page
+
+// Page buttons to show: first, last, and 1 either side of current, with "…" gaps
+function pageNumbers(current, total) {
+  const pages = [];
+  for (let n = 1; n <= total; n++) {
+    if (n === 1 || n === total || Math.abs(n - current) <= 1) pages.push(n);
+    else if (pages[pages.length - 1] !== "…") pages.push("…");
+  }
+  return pages;
+}
+
+const lastProposalComment = (enq) => {
+  const list = enq.proposalComments || [];
+  for (let i = list.length - 1; i >= 0; i--) if (list[i].text) return list[i];
+  return null;
+};
+
 /* ═══════════════════════════════════════════════════════
    MAIN COMPONENT
 ═══════════════════════════════════════════════════════ */
 /* ── Quotation constants ──────────────────────────── */
-const QUOTE_STATUSES = ["draft", "sent", "accepted", "rejected", "expired"];
+// Must match the Quotation model's status enum on the backend
+const QUOTE_STATUS_META = {
+  draft:             { label: "Draft",           cls: "qt-st-draft" },
+  sent:              { label: "Sent",            cls: "qt-st-sent" },
+  under_negotiation: { label: "Negotiating",     cls: "qt-st-negotiating" },
+  approved:          { label: "Approved",        cls: "qt-st-accepted" },
+  rejected:          { label: "Rejected",        cls: "qt-st-rejected" },
+  final:             { label: "Final",           cls: "qt-st-final" },
+  converted:         { label: "Converted to PI", cls: "qt-st-converted" },
+  expired:           { label: "Expired",         cls: "qt-st-expired" },
+};
+const QUOTE_STATUSES = Object.keys(QUOTE_STATUS_META);
+// "converted" is only set by converting to a proforma invoice, never picked by hand
+const QUOTE_PICKABLE = QUOTE_STATUSES.filter(s => s !== "converted");
 const EMPTY_LINE = { description: "", qty: 1, rate: 0, amount: 0 };
 const EMPTY_QUOTE = {
   clientName: "", clientPhone: "", clientEmail: "", clientCompany: "",
@@ -104,29 +166,37 @@ function fmtCurrency(n) {
   return `₹${Number(n || 0).toLocaleString("en-IN")}`;
 }
 function getQuoteStatusClass(s) {
-  return { draft:"qt-st-draft", sent:"qt-st-sent", accepted:"qt-st-accepted", rejected:"qt-st-rejected", expired:"qt-st-expired" }[s] || "qt-st-draft";
+  return QUOTE_STATUS_META[s]?.cls || "qt-st-draft";
 }
+const quoteStatusLabel = (s) => QUOTE_STATUS_META[s]?.label || s;
+const lastComment = (q) => (q.comments?.length ? q.comments[q.comments.length - 1] : null);
 
 export default function EnquiriesPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("enquiries"); // enquiries | quotations
   const [enqSite, setEnqSite] = useState("nnc"); // nnc | nncdigital — which website's enquiries
   const [mode, setMode] = useState("list"); // list | form | view
   const [enquiries, setEnquiries] = useState([]);
   const [totalCount, setTotalCount] = useState(0);
   const [stats, setStats] = useState({
-    total: 0, byStatus: {}, byService: [], conversionRate: 0, newThisMonth: 0, todayFollowUps: 0, unseen: 0,
+    total: 0, byStatus: {}, byService: [], conversionRate: 0, newThisMonth: 0,
+    todayFollowUps: 0, overdueFollowUps: 0, upcomingFollowUps: 0, unseen: 0,
+    converted: 0, lost: 0, scheduledFollowUps: 0,
   });
   // Unseen (new, not-yet-viewed) enquiry counts per site — drives the tab alert badges
   const [unseenCounts, setUnseenCounts] = useState({ nnc: 0, nncdigital: 0 });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [filters, setFilters] = useState({ branch: "", status: "", source: "", service: "", landingPage: "", q: "", dateRange: "", page: 1 });
+  const [filters, setFilters] = useState({ branch: "", status: "", source: "", service: "", landingPage: "", q: "", dateRange: "", followUp: "", page: 1 });
   const [exporting, setExporting] = useState(false);
   const [formData, setFormData] = useState({ ...EMPTY_FORM });
   const [editingId, setEditingId] = useState(null);
   const [viewingEnquiry, setViewingEnquiry] = useState(null);
   const [noteForm, setNoteForm] = useState({ action: "", note: "" });
   const [savingNote, setSavingNote] = useState(false);
+  const [fuModal, setFuModal]     = useState(null); // enquiry whose follow-up calendar popup is open
+  const [propModal, setPropModal] = useState(null); // enquiry whose proposal popup is open
+  const [lostModal, setLostModal] = useState(null); // enquiry being marked as lost
 
   // ── Quotation state ──────────────────────────────
   const [quoteMode, setQuoteMode]           = useState("list"); // list | form | view
@@ -139,6 +209,8 @@ export default function EnquiriesPage() {
   const [quoteForm, setQuoteForm]           = useState({ ...EMPTY_QUOTE });
   const [quoteEditId, setQuoteEditId]       = useState(null);
   const [viewingQuote, setViewingQuote]     = useState(null);
+  const [quoteComment, setQuoteComment]     = useState("");
+  const [savingComment, setSavingComment]   = useState(false);
 
   /* ── Auth header ── */
   function authHeader() {
@@ -208,19 +280,52 @@ export default function EnquiriesPage() {
 
   const updateQuoteStatus = async (id, status) => {
     try {
-      const res  = await fetch(`${API}/api/quotations/${id}`, {
-        method: "PUT",
+      const res  = await fetch(`${API}/api/quotations/${id}/status`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json", ...authHeader() },
         body: JSON.stringify({ status }),
       });
       const json = await res.json();
       if (json.success) {
-        toast.success(`Marked as ${status}`);
-        fetchQuotes();
+        toast.success(`Marked as ${quoteStatusLabel(status)}`);
+        setQuotes(list => list.map(q => q._id === id ? json.data : q));
         fetchQuoteStats();
         if (viewingQuote?._id === id) setViewingQuote(json.data);
       } else toast.error(json.message || "Update failed");
     } catch { toast.error("Update failed"); }
+  };
+
+  const addQuoteComment = async (id) => {
+    const text = quoteComment.trim();
+    if (!text) return toast.error("Write a comment first");
+    setSavingComment(true);
+    try {
+      const res  = await fetch(`${API}/api/quotations/${id}/comments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ text }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Comment added");
+        setQuoteComment("");
+        setViewingQuote(json.data);
+        setQuotes(list => list.map(q => q._id === id ? json.data : q));
+      } else toast.error(json.message || "Failed to add comment");
+    } catch { toast.error("Failed to add comment"); }
+    finally { setSavingComment(false); }
+  };
+
+  const deleteQuoteComment = async (id, commentId) => {
+    if (!window.confirm("Delete this comment?")) return;
+    try {
+      const res  = await fetch(`${API}/api/quotations/${id}/comments/${commentId}`, { method: "DELETE", headers: authHeader() });
+      const json = await res.json();
+      if (json.success) {
+        setViewingQuote(json.data);
+        setQuotes(list => list.map(q => q._id === id ? json.data : q));
+      } else toast.error(json.message || "Delete failed");
+    } catch { toast.error("Delete failed"); }
   };
 
   // Line item helpers
@@ -251,6 +356,7 @@ export default function EnquiriesPage() {
     if (filters.landingPage) p.set("landingPage", filters.landingPage);
     if (filters.q)           p.set("q",           filters.q);
     if (filters.dateRange)   p.set("dateRange",   filters.dateRange);
+    if (filters.followUp)    p.set("followUp",    filters.followUp);
     Object.entries(extra).forEach(([k, v]) => p.set(k, v));
     return p;
   }
@@ -259,10 +365,11 @@ export default function EnquiriesPage() {
   const fetchEnquiries = useCallback(async () => {
     setLoading(true);
     try {
-      const p = buildParams({ page: filters.page });
+      const p = buildParams({ page: filters.page, limit: PAGE_SIZE });
       const res  = await fetch(`${API}/api/enquiries?${p}`, { headers: authHeader() });
       const json = await res.json();
-      if (json.success) { setEnquiries(json.data || []); setTotalCount(json.total || 0); }
+      // Converted enquiries belong to Projects only (the API already excludes them)
+      if (json.success) { setEnquiries((json.data || []).filter(e => !e.convertedToLead)); setTotalCount(json.total || 0); }
       else toast.error(json.message || "Failed to load enquiries");
     } catch {
       toast.error("Failed to load enquiries");
@@ -366,6 +473,99 @@ export default function EnquiriesPage() {
     }
   };
 
+  /* ── Add a follow-up to the main calendar (fire-and-forget) ── */
+  const syncFollowUpToCalendar = (enq, date) => {
+    if (!date) return;
+    fetch(`${API}/api/calendar-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authHeader() },
+      body: JSON.stringify({
+        enquiryId: enq._id,
+        type: "enquiry_followup",
+        date,
+        title: `Follow-up: ${enq.name}`,
+        notes: `Enquiry follow-up for ${enq.name} (${enq.phone})${enq.company ? " — " + enq.company : ""}`,
+      }),
+    }).catch(() => {});
+  };
+
+  /* ── Put an updated enquiry back into the list + open detail view ── */
+  const applyUpdatedEnquiry = (updated) => {
+    setEnquiries(list => list.map(e => e._id === updated._id ? { ...e, ...updated, seen: e.seen } : e));
+    setViewingEnquiry(v => (v && v._id === updated._id ? { ...v, ...updated } : v));
+  };
+
+  /* ── Follow-up popup: save / clear (return true on success so the popup closes) ── */
+  const saveFollowUp = async (enq, date, note) => {
+    try {
+      // Sets the date and logs one "Follow-up Scheduled" entry (with the note, if any)
+      const res  = await fetch(`${API}/api/enquiries/${enq._id}/activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ note, followUpDate: date }),
+      });
+      const json = await res.json();
+      if (!json.success) { toast.error(json.message || "Failed to save follow-up"); return false; }
+      toast.success(`Follow-up set for ${fmtDate(date)}`);
+      if (date !== fuKey(enq.followUpDate)) syncFollowUpToCalendar(enq, date);
+      applyUpdatedEnquiry(json.data);
+      fetchEnquiries();
+      fetchStats();
+      return true;
+    } catch { toast.error("Failed to save follow-up"); return false; }
+  };
+
+  const clearFollowUp = async (enq) => {
+    try {
+      const res  = await fetch(`${API}/api/enquiries/${enq._id}/activity`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ followUpDate: null }),
+      });
+      const json = await res.json();
+      if (!json.success) { toast.error(json.message || "Failed to remove follow-up"); return false; }
+      toast.success("Follow-up removed");
+      applyUpdatedEnquiry(json.data);
+      fetchEnquiries();
+      fetchStats();
+      return true;
+    } catch { toast.error("Failed to remove follow-up"); return false; }
+  };
+
+  /* ── Lost: mark lost (with reason) or reopen ── */
+  const setLost = async (enq, lost, reason = "") => {
+    try {
+      const res  = await fetch(`${API}/api/enquiries/${enq._id}/lost`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ lost, reason }),
+      });
+      const json = await res.json();
+      if (!json.success) { toast.error(json.message || "Update failed"); return false; }
+      toast.success(lost ? "Marked as lost" : "Lead reopened");
+      applyUpdatedEnquiry(json.data);
+      fetchEnquiries();
+      fetchStats();
+      return true;
+    } catch { toast.error("Update failed"); return false; }
+  };
+
+  /* ── Proposal popup: status + comment ── */
+  const saveProposal = async (enq, status, comment) => {
+    try {
+      const res  = await fetch(`${API}/api/enquiries/${enq._id}/proposal`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeader() },
+        body: JSON.stringify({ status, comment }),
+      });
+      const json = await res.json();
+      if (!json.success) { toast.error(json.message || "Failed to update proposal"); return false; }
+      toast.success(`Proposal: ${proposalLabel(status)}`);
+      applyUpdatedEnquiry(json.data);
+      return true;
+    } catch { toast.error("Failed to update proposal"); return false; }
+  };
+
   /* ── Save ── */
   const handleSave = async () => {
     if (!formData.name.trim()) return toast.error("Name is required");
@@ -388,23 +588,11 @@ export default function EnquiriesPage() {
 
         /* Sync follow-up date to calendar */
         if (formData.followUpDate) {
-          const savedEnquiry = json.data;
           const prevDate = editingId
             ? enquiries.find(e => e._id === editingId)?.followUpDate
             : null;
-          const prevDateStr = prevDate ? new Date(prevDate).toISOString().split("T")[0] : "";
-          if (formData.followUpDate !== prevDateStr) {
-            fetch(`${API}/api/calendar-events`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json", ...authHeader() },
-              body: JSON.stringify({
-                enquiryId: savedEnquiry?._id || editingId,
-                type: "enquiry_followup",
-                date: formData.followUpDate,
-                title: `Follow-up: ${formData.name}`,
-                notes: `Enquiry follow-up for ${formData.name} (${formData.phone})${formData.company ? " — " + formData.company : ""}`,
-              }),
-            }).catch(() => {});
+          if (formData.followUpDate !== fuKey(prevDate)) {
+            syncFollowUpToCalendar({ ...formData, _id: json.data?._id || editingId }, formData.followUpDate);
           }
         }
 
@@ -432,7 +620,7 @@ export default function EnquiriesPage() {
 
   /* ── Convert ── */
   const handleConvert = async (id) => {
-    if (!window.confirm("Convert this enquiry to a lead?")) return;
+    if (!window.confirm("Convert this enquiry to a lead? It will move to Projects.")) return;
     try {
       const res  = await fetch(`${API}/api/enquiries/${id}/convert`, {
         method: "POST",
@@ -441,12 +629,9 @@ export default function EnquiriesPage() {
       });
       const json = await res.json();
       if (json.success) {
-        toast.success("Enquiry converted to lead!");
-        fetchEnquiries();
-        fetchStats();
-        if (viewingEnquiry && viewingEnquiry._id === id) {
-          setViewingEnquiry(prev => ({ ...prev, convertedToLead: true }));
-        }
+        // Converted enquiries only live in Projects from now on
+        toast.success("Converted — moved to Projects");
+        navigate("/leads");
       } else toast.error(json.message || "Conversion failed");
     } catch { toast.error("Conversion failed"); }
   };
@@ -465,8 +650,7 @@ export default function EnquiriesPage() {
       if (json.success) {
         toast.success("Activity logged!");
         setNoteForm({ action: "", note: "" });
-        const updated = json.data;
-        setViewingEnquiry(updated);
+        setViewingEnquiry(v => ({ ...v, ...json.data }));
       } else toast.error(json.message || "Failed to add note");
     } catch { toast.error("Failed to add note"); }
     finally { setSavingNote(false); }
@@ -474,7 +658,7 @@ export default function EnquiriesPage() {
 
   /* ── Filter change ── */
   const setFilter = (key, val) => setFilters(f => ({ ...f, [key]: val, page: 1 }));
-  const clearFilters = () => setFilters({ branch: "", status: "", source: "", service: "", landingPage: "", q: "", dateRange: "", page: 1 });
+  const clearFilters = () => setFilters({ branch: "", status: "", source: "", service: "", landingPage: "", q: "", dateRange: "", followUp: "", page: 1 });
 
   /* ── Form field change ── */
   const setField = (key, val) => setFormData(f => ({ ...f, [key]: val }));
@@ -486,7 +670,11 @@ export default function EnquiriesPage() {
   };
 
   /* ── Pagination ── */
-  const totalPages = Math.max(1, Math.ceil(totalCount / 20));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const goToPage = (n) => {
+    setFilters(f => ({ ...f, page: n }));
+    document.querySelector(".enq-table-card")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   // Clamp page if it exceeds totalPages (e.g. after filtering reduces results)
   useEffect(() => {
@@ -581,7 +769,7 @@ export default function EnquiriesPage() {
                     </select>
                     <select value={quoteFilters.status} onChange={e => setQuoteFilters(f => ({ ...f, status: e.target.value, page: 1 }))}>
                       <option value="">All Statuses</option>
-                      {QUOTE_STATUSES.map(s => <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                      {QUOTE_STATUSES.map(s => <option key={s} value={s}>{quoteStatusLabel(s)}</option>)}
                     </select>
                     <div className="enq-search-wrap">
                       <Search size={14} />
@@ -617,13 +805,14 @@ export default function EnquiriesPage() {
                               <th>Total</th>
                               <th>Valid Until</th>
                               <th>Status</th>
+                              <th>Comment</th>
                               <th>Actions</th>
                             </tr>
                           </thead>
                           <tbody>
                             {quotes.map((q, idx) => (
                               <tr key={q._id}>
-                                <td>{(quoteFilters.page - 1) * 50 + idx + 1}</td>
+                                <td>{(quoteFilters.page - 1) * 20 + idx + 1}</td>
                                 <td><span className="qt-number">{q.quoteNumber}</span></td>
                                 <td>
                                   <div className="enq-name">{q.clientName}</div>
@@ -632,10 +821,43 @@ export default function EnquiriesPage() {
                                 <td>{q.branch}</td>
                                 <td><strong>{fmtCurrency(q.total)}</strong></td>
                                 <td>{fmtDate(q.validUntil)}</td>
-                                <td><span className={`enq-status ${getQuoteStatusClass(q.status)}`}>{q.status}</span></td>
+                                <td>
+                                  <select
+                                    className={`qt-status-select ${getQuoteStatusClass(q.status)}`}
+                                    value={q.status}
+                                    disabled={q.status === "converted"}
+                                    title={q.status === "converted" ? "Converted to proforma — status locked" : "Change status"}
+                                    onChange={e => updateQuoteStatus(q._id, e.target.value)}
+                                  >
+                                    {(q.status === "converted" ? QUOTE_STATUSES : QUOTE_PICKABLE).map(s => (
+                                      <option key={s} value={s}>{quoteStatusLabel(s)}</option>
+                                    ))}
+                                  </select>
+                                </td>
+                                <td>
+                                  {lastComment(q) ? (
+                                    <button
+                                      className="qt-comment-cell"
+                                      title={lastComment(q).text}
+                                      onClick={() => { setViewingQuote(q); setQuoteComment(""); setQuoteMode("view"); }}
+                                    >
+                                      <span className="qt-comment-text">{lastComment(q).text}</span>
+                                      <span className="qt-comment-meta">
+                                        {q.comments.length > 1 ? `${q.comments.length} comments · ` : ""}{fmtDate(lastComment(q).at)}
+                                      </span>
+                                    </button>
+                                  ) : (
+                                    <button
+                                      className="qt-comment-add"
+                                      onClick={() => { setViewingQuote(q); setQuoteComment(""); setQuoteMode("view"); }}
+                                    >
+                                      <MessageSquare size={12} /> Add
+                                    </button>
+                                  )}
+                                </td>
                                 <td>
                                   <div className="enq-actions">
-                                    <button className="enq-btn-icon" title="View" onClick={() => { setViewingQuote(q); setQuoteMode("view"); }}>
+                                    <button className="enq-btn-icon" title="View" onClick={() => { setViewingQuote(q); setQuoteComment(""); setQuoteMode("view"); }}>
                                       <Eye size={15} />
                                     </button>
                                     <button className="enq-btn-icon" title="Edit" onClick={() => {
@@ -657,8 +879,8 @@ export default function EnquiriesPage() {
                                         <Send size={15} />
                                       </button>
                                     )}
-                                    {q.status === "sent" && (
-                                      <button className="enq-btn-icon" title="Mark Accepted" onClick={() => updateQuoteStatus(q._id, "accepted")} style={{ color:"#16a34a" }}>
+                                    {(q.status === "sent" || q.status === "under_negotiation") && (
+                                      <button className="enq-btn-icon" title="Mark Approved" onClick={() => updateQuoteStatus(q._id, "approved")} style={{ color:"#16a34a" }}>
                                         <CheckCircle size={15} />
                                       </button>
                                     )}
@@ -831,15 +1053,15 @@ export default function EnquiriesPage() {
                       <div className="enq-detail-name">{viewingQuote.quoteNumber}</div>
                       <div className="enq-detail-phone">{viewingQuote.clientName} · {viewingQuote.clientPhone || viewingQuote.clientEmail || ""}</div>
                     </div>
-                    <span className={`enq-status ${getQuoteStatusClass(viewingQuote.status)}`}>{viewingQuote.status}</span>
+                    <span className={`enq-status ${getQuoteStatusClass(viewingQuote.status)}`}>{quoteStatusLabel(viewingQuote.status)}</span>
                   </div>
                   <div className="enq-detail-acts">
                     {viewingQuote.status === "draft" && (
                       <button className="enq-convert-btn" onClick={() => updateQuoteStatus(viewingQuote._id, "sent")}><Send size={14} /> Mark as Sent</button>
                     )}
-                    {viewingQuote.status === "sent" && (
+                    {(viewingQuote.status === "sent" || viewingQuote.status === "under_negotiation") && (
                       <>
-                        <button className="enq-convert-btn" style={{ background:"#16a34a" }} onClick={() => updateQuoteStatus(viewingQuote._id, "accepted")}><CheckCircle size={14} /> Accept</button>
+                        <button className="enq-convert-btn" style={{ background:"#16a34a" }} onClick={() => updateQuoteStatus(viewingQuote._id, "approved")}><CheckCircle size={14} /> Approve</button>
                         <button className="enq-btn-sec" onClick={() => updateQuoteStatus(viewingQuote._id, "rejected")}><XCircle size={14} /> Reject</button>
                       </>
                     )}
@@ -915,6 +1137,73 @@ export default function EnquiriesPage() {
                       </div>
                     </div>
                   </div>
+
+                  {/* Status & Comments */}
+                  <div className="enq-form-card" style={{ marginTop:20 }}>
+                    <div className="enq-form-card-title">Status &amp; Comments</div>
+                    <div className="enq-form-card-body">
+                      <div className="enq-field" style={{ maxWidth:280, marginBottom:18 }}>
+                        <label className="enq-label">Status</label>
+                        <select
+                          className={`enq-select qt-status-select ${getQuoteStatusClass(viewingQuote.status)}`}
+                          value={viewingQuote.status}
+                          disabled={viewingQuote.status === "converted"}
+                          onChange={e => updateQuoteStatus(viewingQuote._id, e.target.value)}
+                        >
+                          {(viewingQuote.status === "converted" ? QUOTE_STATUSES : QUOTE_PICKABLE).map(s => (
+                            <option key={s} value={s}>{quoteStatusLabel(s)}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {viewingQuote.comments?.length ? (
+                        <div className="enq-activity-timeline">
+                          {[...viewingQuote.comments].reverse().map(c => (
+                            <div key={c._id} className="enq-activity-item">
+                              <div className="enq-activity-dot">
+                                <MessageSquare size={12} color="#7c3aed" />
+                              </div>
+                              <div className="enq-activity-content" style={{ flex:1 }}>
+                                <div className="enq-activity-note" style={{ whiteSpace:"pre-wrap", color:"#334155" }}>{c.text}</div>
+                                <div className="enq-activity-meta">
+                                  {c.by && <span>{c.by} · </span>}
+                                  {fmtDateTime(c.at)}
+                                </div>
+                              </div>
+                              {isMasterAdmin() && (
+                                <button className="enq-btn-icon danger" title="Delete comment" onClick={() => deleteQuoteComment(viewingQuote._id, c._id)}>
+                                  <Trash2 size={13} />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ color:"#94a3b8", fontSize:13, padding:"4px 0 8px" }}>No comments yet</div>
+                      )}
+
+                      <div className="enq-add-note-form">
+                        <div className="enq-field">
+                          <label className="enq-label">Add Comment</label>
+                          <textarea
+                            className="enq-textarea"
+                            rows={3}
+                            placeholder="e.g. Client wants 10% discount, will confirm by Friday…"
+                            value={quoteComment}
+                            onChange={e => setQuoteComment(e.target.value)}
+                            style={{ width:"100%", boxSizing:"border-box" }}
+                          />
+                        </div>
+                        <button
+                          className="enq-note-save-btn"
+                          disabled={savingComment || !quoteComment.trim()}
+                          onClick={() => addQuoteComment(viewingQuote._id)}
+                        >
+                          {savingComment ? "Saving…" : "Add Comment"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -972,36 +1261,65 @@ export default function EnquiriesPage() {
               </button>
             </div>
 
-            {/* KPI Strip */}
-            <div className="enq-kpi-strip">
-              <div className="enq-kpi-item">
-                <div className="enq-kpi-icon"><MessageSquare size={20} /></div>
-                <div className="enq-kpi-text">
-                  <div className="enq-kpi-val">{stats.total}</div>
-                  <div className="enq-kpi-label">Total Enquiries</div>
-                </div>
-              </div>
-              <div className="enq-kpi-item">
-                <div className="enq-kpi-icon"><Calendar size={20} /></div>
-                <div className="enq-kpi-text">
-                  <div className="enq-kpi-val">{stats.newThisMonth}</div>
-                  <div className="enq-kpi-label">New This Month</div>
-                </div>
-              </div>
-              <div className="enq-kpi-item">
-                <div className="enq-kpi-icon"><Clock size={20} /></div>
-                <div className="enq-kpi-text">
-                  <div className="enq-kpi-val">{stats.todayFollowUps}</div>
-                  <div className="enq-kpi-label">Today's Follow-ups</div>
-                </div>
-              </div>
-              <div className="enq-kpi-item">
-                <div className="enq-kpi-icon"><TrendingUp size={20} /></div>
-                <div className="enq-kpi-text">
-                  <div className="enq-kpi-val">{stats.conversionRate}%</div>
-                  <div className="enq-kpi-label">Conversion Rate</div>
-                </div>
-              </div>
+            {/* Leads dashboard — each card filters the list (Converted opens Projects) */}
+            <div className="enq-dash">
+              {[
+                {
+                  key: "total", tone: "violet", icon: <MessageSquare size={20} />,
+                  label: "Total Leads", val: stats.total,
+                  sub: `${Math.max(0, stats.total - stats.converted)} open`,
+                  active: !filters.followUp && !filters.status,
+                  onClick: () => setFilters(f => ({ ...f, followUp: "", status: "", page: 1 })),
+                  title: "Show all open leads",
+                },
+                {
+                  key: "converted", tone: "green", icon: <CheckCircle size={20} />,
+                  label: "Converted Leads", val: stats.converted,
+                  sub: `${stats.total ? Math.round((stats.converted / stats.total) * 100) : 0}% of all leads`,
+                  onClick: () => navigate("/leads"),
+                  title: "Converted leads are in Projects",
+                },
+                {
+                  key: "scheduled", tone: "blue", icon: <Calendar size={20} />,
+                  label: "Follow-up Leads", val: stats.scheduledFollowUps,
+                  sub: stats.overdueFollowUps > 0 ? `${stats.overdueFollowUps} overdue` : "with a follow-up date",
+                  subTone: stats.overdueFollowUps > 0 ? "red" : "",
+                  active: filters.followUp === "scheduled",
+                  onClick: () => setFilters(f => ({ ...f, followUp: f.followUp === "scheduled" ? "" : "scheduled", status: "", page: 1 })),
+                  title: "Show leads that have a follow-up scheduled",
+                },
+                {
+                  key: "today", tone: "amber", icon: <Clock size={20} />,
+                  label: "Today's Follow-ups", val: stats.todayFollowUps,
+                  sub: "due today",
+                  active: filters.followUp === "today",
+                  onClick: () => setFilters(f => ({ ...f, followUp: f.followUp === "today" ? "" : "today", status: "", page: 1 })),
+                  title: "Show follow-ups due today",
+                },
+                {
+                  key: "lost", tone: "red", icon: <XCircle size={20} />,
+                  label: "Lost Leads", val: stats.lost,
+                  sub: `${stats.total ? Math.round((stats.lost / stats.total) * 100) : 0}% of all leads`,
+                  active: filters.status === "lost",
+                  onClick: () => setFilters(f => ({ ...f, status: f.status === "lost" ? "" : "lost", followUp: "", page: 1 })),
+                  title: "Show lost leads",
+                },
+              ].map(c => (
+                <button
+                  key={c.key}
+                  type="button"
+                  className={`enq-dash-card ${c.tone}${c.active ? " active" : ""}`}
+                  onClick={c.onClick}
+                  title={c.title}
+                >
+                  <div className="enq-dash-icon">{c.icon}</div>
+                  <div className="enq-dash-text">
+                    <div className="enq-dash-val">{c.val}</div>
+                    <div className="enq-dash-label">{c.label}</div>
+                    <div className={`enq-dash-sub ${c.subTone || ""}`}>{c.sub}</div>
+                  </div>
+                </button>
+              ))}
             </div>
 
             {/* Filter bar */}
@@ -1021,6 +1339,21 @@ export default function EnquiriesPage() {
                     onClick={() => setFilter("dateRange", dr.key)}
                   >
                     {dr.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Follow-up quick filters */}
+              <div className="enq-date-range-group enq-fu-group">
+                <span className="enq-fu-group-label"><Calendar size={13} /> Follow-ups</span>
+                {FOLLOW_UP_VIEWS.map(v => (
+                  <button
+                    key={v.key}
+                    className={`enq-dr-btn enq-fu-btn-${v.key || "all"}${filters.followUp === v.key ? " active" : ""}`}
+                    onClick={() => setFilter("followUp", v.key)}
+                  >
+                    {v.label}
+                    {v.stat && stats[v.stat] > 0 && <span className="enq-fu-count">{stats[v.stat]}</span>}
                   </button>
                 ))}
               </div>
@@ -1068,7 +1401,12 @@ export default function EnquiriesPage() {
                 <div className="enq-table-head">
                   <span>
                     <span className="enq-table-head-title">
-                      {filters.dateRange === "today" ? "Today's Enquiries"
+                      {filters.followUp === "scheduled" ? "Leads with Follow-ups"
+                        : filters.status === "lost"       ? "Lost Leads"
+                        : filters.followUp === "today"    ? "Today's Follow-ups"
+                        : filters.followUp === "overdue"  ? "Overdue Follow-ups"
+                        : filters.followUp === "upcoming" ? "Upcoming Follow-ups"
+                        : filters.dateRange === "today" ? "Today's Enquiries"
                         : filters.dateRange === "week"  ? "This Week's Enquiries"
                         : filters.dateRange === "month" ? "This Month's Enquiries"
                         : filters.dateRange === "year"  ? "This Year's Enquiries"
@@ -1090,7 +1428,9 @@ export default function EnquiriesPage() {
                 ) : enquiries.length === 0 ? (
                   <div className="enq-empty">
                     <div className="enq-empty-icon"><MessageSquare size={40} /></div>
-                    <div className="enq-empty-text">No enquiries found</div>
+                    <div className="enq-empty-text">
+                      {filters.followUp === "today" ? "No follow-ups due today" : "No enquiries found"}
+                    </div>
                     <div className="enq-empty-sub">Try adjusting filters or add a new enquiry</div>
                   </div>
                 ) : (
@@ -1106,16 +1446,26 @@ export default function EnquiriesPage() {
                           <th>Branch</th>
                           <th>Assigned To</th>
                           <th>Follow-up</th>
+                          <th>Proposal</th>
                           <th>Status</th>
                           <th>Actions</th>
                         </tr>
                       </thead>
                       <tbody>
                         {enquiries.map((enq, idx) => (
-                          <tr key={enq._id} className={!enq.seen ? "enq-row-unseen" : ""}>
+                          <tr
+                            key={enq._id}
+                            className={`enq-row-click${!enq.seen ? " enq-row-unseen" : ""}`}
+                            title="Click to open details"
+                            onClick={e => {
+                              // Buttons inside the row (edit, follow-up, landing-page badge…) keep their own action
+                              if (e.target.closest("button, a, input, select, .enq-landing-badge")) return;
+                              openView(enq);
+                            }}
+                          >
                             <td>
                               {!enq.seen && <span className="enq-new-dot" title="New enquiry" />}
-                              {(filters.page - 1) * 20 + idx + 1}
+                              {(filters.page - 1) * PAGE_SIZE + idx + 1}
                             </td>
                             <td>
                               <div className="enq-name">{enq.name}</div>
@@ -1150,7 +1500,32 @@ export default function EnquiriesPage() {
                             </td>
                             <td>{enq.branch || "—"}</td>
                             <td>{enq.assignedTo || "—"}</td>
-                            <td>{fmtDate(enq.followUpDate)}</td>
+                            <td>
+                              {enq.followUpDate ? (
+                                <button
+                                  className={`enq-fu-chip enq-fu-${followUpState(enq) || "none"}`}
+                                  title="Change follow-up"
+                                  onClick={() => setFuModal(enq)}
+                                >
+                                  {followUpState(enq) === "overdue" && <AlertTriangle size={11} />}
+                                  {followUpState(enq) === "today" ? "Today" : fmtDate(enq.followUpDate)}
+                                </button>
+                              ) : "—"}
+                            </td>
+                            <td>
+                              {enq.proposalStatus ? (
+                                <button className="enq-ps-cell" title="Update proposal" onClick={() => setPropModal(enq)}>
+                                  <span className={`enq-ps-badge ${PROPOSAL_STATUS_META[enq.proposalStatus]?.cls || ""}`}>
+                                    {proposalLabel(enq.proposalStatus)}
+                                  </span>
+                                  {lastProposalComment(enq) && (
+                                    <span className="enq-ps-cell-text" title={lastProposalComment(enq).text}>
+                                      {lastProposalComment(enq).text}
+                                    </span>
+                                  )}
+                                </button>
+                              ) : "—"}
+                            </td>
                             <td>
                               <span className={`enq-status ${getStatusClass(enq.status)}`}>
                                 {enq.status || "new"}
@@ -1192,18 +1567,35 @@ export default function EnquiriesPage() {
                 {/* Pagination */}
                 {totalPages > 1 && (
                   <div className="enq-pagination">
-                    <span className="enq-page-info">Page {filters.page} of {totalPages}</span>
+                    <span className="enq-page-info">
+                      Showing {(filters.page - 1) * PAGE_SIZE + 1}–{Math.min(filters.page * PAGE_SIZE, totalCount)} of {totalCount}
+                    </span>
                     <button
                       className="enq-page-btn"
+                      title="Previous page"
                       disabled={filters.page <= 1}
-                      onClick={() => setFilters(f => ({ ...f, page: f.page - 1 }))}
+                      onClick={() => goToPage(filters.page - 1)}
                     >
                       <ChevronLeft size={14} />
                     </button>
+                    {pageNumbers(filters.page, totalPages).map((n, i) =>
+                      n === "…" ? (
+                        <span key={`gap-${i}`} className="enq-page-gap">…</span>
+                      ) : (
+                        <button
+                          key={n}
+                          className={`enq-page-btn${n === filters.page ? " active" : ""}`}
+                          onClick={() => goToPage(n)}
+                        >
+                          {n}
+                        </button>
+                      )
+                    )}
                     <button
                       className="enq-page-btn"
+                      title="Next page"
                       disabled={filters.page >= totalPages}
-                      onClick={() => setFilters(f => ({ ...f, page: f.page + 1 }))}
+                      onClick={() => goToPage(filters.page + 1)}
                     >
                       <ChevronRight size={14} />
                     </button>
@@ -1499,7 +1891,31 @@ export default function EnquiriesPage() {
                     </div>
                     <div className="enq-detail-field">
                       <div className="enq-detail-field-label">Follow-up Date</div>
-                      <div className="enq-detail-field-val">{fmtDate(viewingEnquiry.followUpDate)}</div>
+                      <div className="enq-detail-field-val">
+                        {viewingEnquiry.followUpDate ? (
+                          <span className={`enq-fu-chip enq-fu-${followUpState(viewingEnquiry) || "none"}`}>
+                            {followUpState(viewingEnquiry) === "overdue" && <AlertTriangle size={11} />}
+                            {fmtDate(viewingEnquiry.followUpDate)}
+                            {followUpState(viewingEnquiry) === "today"   && " · Today"}
+                            {followUpState(viewingEnquiry) === "overdue" && " · Overdue"}
+                          </span>
+                        ) : "—"}
+                      </div>
+                    </div>
+                    <div className="enq-detail-field">
+                      <div className="enq-detail-field-label">Proposal</div>
+                      <div className="enq-detail-field-val">
+                        {viewingEnquiry.proposalStatus ? (
+                          <>
+                            <span className={`enq-ps-badge ${PROPOSAL_STATUS_META[viewingEnquiry.proposalStatus]?.cls || ""}`}>
+                              {proposalLabel(viewingEnquiry.proposalStatus)}
+                            </span>
+                            {lastProposalComment(viewingEnquiry) && (
+                              <div className="enq-ps-detail-text">{lastProposalComment(viewingEnquiry).text}</div>
+                            )}
+                          </>
+                        ) : "—"}
+                      </div>
                     </div>
                     <div className="enq-detail-field">
                       <div className="enq-detail-field-label">Created</div>
@@ -1573,6 +1989,49 @@ export default function EnquiriesPage() {
                         {savingNote ? "Saving…" : "Save Note"}
                       </button>
                     </div>
+
+                    {/* Follow-up + Proposal actions */}
+                    <div className="enq-lead-acts">
+                      <button type="button" className="enq-lead-act fu" onClick={() => setFuModal(viewingEnquiry)}>
+                        <CalendarPlus size={16} />
+                        <span>
+                          <strong>Follow-up</strong>
+                          <small>
+                            {viewingEnquiry.followUpDate ? `Next: ${fmtDate(viewingEnquiry.followUpDate)}` : "Schedule a follow-up"}
+                          </small>
+                        </span>
+                      </button>
+                      <button type="button" className="enq-lead-act ps" onClick={() => setPropModal(viewingEnquiry)}>
+                        <FileText size={16} />
+                        <span>
+                          <strong>Proposal</strong>
+                          <small>
+                            {viewingEnquiry.proposalStatus ? `Status: ${proposalLabel(viewingEnquiry.proposalStatus)}` : "Set status & comment"}
+                          </small>
+                        </span>
+                      </button>
+                      {viewingEnquiry.status === "lost" ? (
+                        <button
+                          type="button"
+                          className="enq-lead-act reopen"
+                          onClick={() => { if (window.confirm(`Reopen ${viewingEnquiry.name}?`)) setLost(viewingEnquiry, false); }}
+                        >
+                          <RefreshCcw size={16} />
+                          <span>
+                            <strong>Reopen</strong>
+                            <small>Lead is marked lost</small>
+                          </span>
+                        </button>
+                      ) : (
+                        <button type="button" className="enq-lead-act lost" onClick={() => setLostModal(viewingEnquiry)}>
+                          <XCircle size={16} />
+                          <span>
+                            <strong>Lost</strong>
+                            <small>Mark this lead as lost</small>
+                          </span>
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1580,6 +2039,29 @@ export default function EnquiriesPage() {
           </div>
         )}
       </div>
+
+      {fuModal && (
+        <FollowUpModal
+          enquiry={fuModal}
+          onSave={(date, note) => saveFollowUp(fuModal, date, note)}
+          onClear={() => clearFollowUp(fuModal)}
+          onClose={() => setFuModal(null)}
+        />
+      )}
+      {propModal && (
+        <ProposalModal
+          enquiry={propModal}
+          onSave={(status, comment) => saveProposal(propModal, status, comment)}
+          onClose={() => setPropModal(null)}
+        />
+      )}
+      {lostModal && (
+        <LostModal
+          enquiry={lostModal}
+          onSave={(reason) => setLost(lostModal, true, reason)}
+          onClose={() => setLostModal(null)}
+        />
+      )}
     </div>
   );
 }

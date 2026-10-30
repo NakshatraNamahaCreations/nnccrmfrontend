@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { toast } from "../utils/toast";
 import "./LeadDrawer.css";
+import GstPicker from "./GstPicker";
+import { calcGst, calcRemaining } from "./gst";
+import ProjectIntegrations from "../pages/Integrations/ProjectIntegrations";
+import { PROJECT_STAGES, PROJECT_STAGE_COLOR, projectStageLabel, projectStagePatch } from "./projectStages";
 
 const money = (n) => {
   try {
@@ -57,6 +61,7 @@ const EMPTY_EDIT_FORM = {
   branch: "Bangalore",
   source: "WhatsApp",
   stage: "Lead Capture",
+  projectStage: "",
   priority: "Hot",
   value: "",
   advanceReceived: "",
@@ -482,6 +487,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
         branch: lead.branch || "Bangalore",
         source: lead.source || "WhatsApp",
         stage: lead.stage || "Lead Capture",
+        projectStage: lead.projectStage || "",
         priority: lead.priority || "Hot",
         value: lead.value > 0 ? Number(lead.value) : "",
         advanceReceived: lead.advanceReceived > 0 ? Number(lead.advanceReceived) : "",
@@ -532,6 +538,11 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
         if (name === "projectCompleted" && checked && !prev.projectCompletionDate) {
           updated.projectCompletionDate = new Date().toISOString().slice(0, 10);
         }
+        // Keep the project stage in step with the "Project Completed" checkbox
+        if (name === "projectCompleted") {
+          if (checked) updated.projectStage = "Project Completed";
+          else if (prev.projectStage === "Project Completed") updated.projectStage = "Deployed / Live";
+        }
         return updated;
       });
     } catch (error) {
@@ -568,6 +579,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
         branch: editForm.branch,
         source: editForm.source,
         stage: editForm.stage,
+        projectStage: editForm.projectStage,
         priority: editForm.priority,
         value: Number(editForm.value || 0),
         advanceReceived: Number(editForm.advanceReceived || 0),
@@ -636,8 +648,11 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                 </div>
 
                 <div className="ldChips">
-                  <span className={`ldChip stage ${chipCls(lead?.stage)}`}>
-                    {lead?.stage || "Lead Capture"}
+                  <span
+                    className="ldChip stage"
+                    style={{ background: (PROJECT_STAGE_COLOR[lead?.projectStage || ""] || PROJECT_STAGE_COLOR[""]).bg, color: (PROJECT_STAGE_COLOR[lead?.projectStage || ""] || PROJECT_STAGE_COLOR[""]).color }}
+                  >
+                    {projectStageLabel(lead?.projectStage)}
                   </span>
                   <span className="ldChip light">{lead?.source || "Direct"}</span>
                   <span className="ldValue">{money(lead?.value || 0)}</span>
@@ -675,7 +690,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
           </div>
 
           <div className="ldTabs">
-            {["Profile", "BANT", "Follow-up", "Calls/WA", "History", "Emails", "Docs", "Notes"].map((t) => (
+            {["Profile", "BANT", "Follow-up", "Calls/WA", "History", "Emails", "Docs", "Notes", "Integrations"].map((t) => (
               <button
                 key={t}
                 type="button"
@@ -759,6 +774,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                     saveNote={saveNote}
                   />
                 )}
+                {activeTab === "Integrations" && <ProjectIntegrations lead={lead} />}
               </>
             ) : null}
           </div>
@@ -854,13 +870,13 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                 </div>
 
                 <div className="ldFormGroup">
-                  <label>Stage</label>
-                  <select name="stage" value={editForm.stage} onChange={handleEditChange}>
-                    <option value="Lead Capture">Lead Capture</option>
-                    <option value="Reachable">Reachable</option>
-                    <option value="Qualified">Qualified</option>
-                    <option value="Proposal">Proposal</option>
-                    <option value="Closed">Closed</option>
+                  <label>Project Stage</label>
+                  <select
+                    value={editForm.projectStage}
+                    onChange={e => setEditForm(p => ({ ...p, ...projectStagePatch(p, e.target.value) }))}
+                  >
+                    <option value="">Not Started</option>
+                    {PROJECT_STAGES.map(x => <option key={x} value={x}>{x}</option>)}
                   </select>
                 </div>
 
@@ -874,12 +890,22 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                 </div>
 
                 <div className="ldFormGroup">
-                  <label>Total Amount Agreed (₹)</label>
+                  <label>Total Amount Agreed (₹){editForm.gstApplicable ? " — excl. GST" : ""}</label>
                   <input
                     type="number"
                     name="value"
                     value={editForm.value}
                     onChange={handleEditChange}
+                  />
+                </div>
+
+                <div className="ldFormGroup" style={{ gridColumn: "1 / -1" }}>
+                  <label>GST</label>
+                  <GstPicker
+                    value={editForm.value}
+                    gstApplicable={editForm.gstApplicable}
+                    gstRate={editForm.gstRate}
+                    onChange={patch => setEditForm(p => ({ ...p, ...patch }))}
                   />
                 </div>
 
@@ -905,41 +931,15 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                 </div>
 
                 <div className="ldFormGroup">
-                  <label>Remaining Balance (₹)</label>
+                  <label>Remaining Balance (₹){editForm.gstApplicable ? " — incl. GST" : ""}</label>
                   <input
                     type="number"
                     readOnly
-                    value={Math.max(0, Number(editForm.value || 0) - Number(editForm.advanceReceived || 0))}
+                    value={calcRemaining(editForm.value, editForm.advanceReceived, editForm.gstApplicable, editForm.gstRate)}
                     className="ldReadOnly"
                   />
                 </div>
 
-                <div className="ldFormGroup">
-                  <label>GST Applicable</label>
-                  <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-                    <button type="button"
-                      onClick={() => setEditForm(p => ({ ...p, gstApplicable: true }))}
-                      style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid", borderColor: editForm.gstApplicable ? "#2563eb" : "#d1d5db", background: editForm.gstApplicable ? "#eff6ff" : "#fff", color: editForm.gstApplicable ? "#2563eb" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                      With GST
-                    </button>
-                    <button type="button"
-                      onClick={() => setEditForm(p => ({ ...p, gstApplicable: false }))}
-                      style={{ flex: 1, padding: "8px 0", borderRadius: 8, border: "1.5px solid", borderColor: !editForm.gstApplicable ? "#2563eb" : "#d1d5db", background: !editForm.gstApplicable ? "#eff6ff" : "#fff", color: !editForm.gstApplicable ? "#2563eb" : "#6b7280", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
-                      Without GST
-                    </button>
-                  </div>
-                </div>
-                {editForm.gstApplicable && (
-                  <div className="ldFormGroup">
-                    <label>GST Rate (%)</label>
-                    <select name="gstRate" value={editForm.gstRate} onChange={handleEditChange}>
-                      <option value={5}>5%</option>
-                      <option value={12}>12%</option>
-                      <option value={18}>18%</option>
-                      <option value={28}>28%</option>
-                    </select>
-                  </div>
-                )}
                 <div className="ldFormGroup">
                   <label>Agreed Timeline (days)</label>
                   <input
@@ -1055,7 +1055,8 @@ function InfoGridCard({ title, children }) {
 
 function ProfileTab({ lead }) {
   const timestamps = lead.stageTimestamps || [];
-  const remaining = Math.max(0, Number(lead.value || 0) - Number(lead.advanceReceived || 0));
+  const gstInfo   = calcGst(lead.value, lead.gstApplicable, lead.gstRate || 18);
+  const remaining = calcRemaining(lead.value, lead.advanceReceived, lead.gstApplicable, lead.gstRate || 18);
   const finalPayDate = lead.agreedTimeline > 0
     ? (() => { const d = new Date(); d.setDate(d.getDate() + Number(lead.agreedTimeline)); return d.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }); })()
     : "—";
@@ -1097,8 +1098,8 @@ function ProfileTab({ lead }) {
             <div className="ldVal">{lead.branch || "-"}</div>
           </div>
           <div className="ldInfoItem">
-            <div className="ldLabel">Stage</div>
-            <div className="ldVal">{lead.stage || "-"}</div>
+            <div className="ldLabel">Project Stage</div>
+            <div className="ldVal">{projectStageLabel(lead.projectStage)}</div>
           </div>
           <div className="ldInfoItem">
             <div className="ldLabel">Priority</div>
@@ -1110,9 +1111,21 @@ function ProfileTab({ lead }) {
       <InfoGridCard title="FINANCIAL DETAILS">
         <div className="ldGrid2">
           <div className="ldInfoItem">
-            <div className="ldLabel">Total Amount Agreed (₹)</div>
+            <div className="ldLabel">Total Amount Agreed (₹){lead.gstApplicable ? " — excl. GST" : ""}</div>
             <div className="ldVal">{lead.value > 0 ? `₹${Number(lead.value).toLocaleString("en-IN")}` : "-"}</div>
           </div>
+          <div className="ldInfoItem">
+            <div className="ldLabel">GST</div>
+            <div className="ldVal">
+              {lead.gstApplicable ? `${gstInfo.rate}% · ₹${gstInfo.gst.toLocaleString("en-IN")}` : "Without GST"}
+            </div>
+          </div>
+          {lead.gstApplicable && lead.value > 0 && (
+            <div className="ldInfoItem">
+              <div className="ldLabel">Total incl. GST (₹)</div>
+              <div className="ldVal" style={{ fontWeight: 700, color: "#1d4ed8" }}>₹{gstInfo.total.toLocaleString("en-IN")}</div>
+            </div>
+          )}
           <div className="ldInfoItem">
             <div className="ldLabel">Advance Received (₹)</div>
             <div className="ldVal">{lead.advanceReceived > 0 ? `₹${Number(lead.advanceReceived).toLocaleString("en-IN")}` : "-"}</div>

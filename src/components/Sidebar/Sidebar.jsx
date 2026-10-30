@@ -125,9 +125,8 @@ export default function Sidebar() {
     {
       title: "Sales",
       items: [
-        { label: "Enquiries",  path: "/enquiries",   moduleKey: "enquiries",   icon: <MessageSquare size={15} />, badge: newEnquiryCount || null },
-        { label: "All Leads", path: "/leads",     moduleKey: "all-leads", icon: <Users size={15} /> },
-        { label: "Quotations", path: "/quotations",  moduleKey: "quotations",  icon: <ReceiptText size={15} /> },
+        { label: "All Leads",  path: "/enquiries",   moduleKey: "enquiries",   icon: <MessageSquare size={15} />, badge: newEnquiryCount || null },
+        { label: "Projects", path: "/leads",     moduleKey: "all-leads", icon: <Users size={15} /> },        { label: "Quotations", path: "/quotations",  moduleKey: "quotations",  icon: <ReceiptText size={15} /> },
         { label: "Calendar",   path: "/calendar",    moduleKey: "calendar",    icon: <CalendarDays size={15} /> },
       ],
     },

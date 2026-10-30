@@ -1071,7 +1071,7 @@ export default function QuotationPage() {
     if (!val.trim()) { setEnquirySuggestions([]); setShowSuggestions(false); return; }
     enquirySearchTimer.current = setTimeout(async () => {
       try {
-        const res  = await fetch(`${API}/api/enquiries?q=${encodeURIComponent(val)}&limit=5`, { headers: authHeader() });
+        const res  = await fetch(`${API}/api/enquiries?q=${encodeURIComponent(val)}&limit=5&includeConverted=true`, { headers: authHeader() });
         const json = await res.json();
         if (json.success) { setEnquirySuggestions(json.data || []); setShowSuggestions(true); }
       } catch {}

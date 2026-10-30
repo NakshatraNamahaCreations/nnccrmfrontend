@@ -174,7 +174,7 @@ export default function CalendarPage() {
       try {
         setSearchingEnq(true);
         const res  = await fetch(
-          `${API_BASE}/api/enquiries?q=${encodeURIComponent(enqSearch.trim())}&limit=8`,
+          `${API_BASE}/api/enquiries?q=${encodeURIComponent(enqSearch.trim())}&limit=8&includeConverted=true`,
           { headers: authHeader() }
         ).then(handle401);
         const json = await res.json();

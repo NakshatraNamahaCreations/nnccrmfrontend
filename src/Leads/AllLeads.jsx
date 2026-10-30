@@ -5,6 +5,9 @@ import Sidebar from "../components/Sidebar/Sidebar";
 import LeadDrawer from "../Leads/LeadDrawer";
 import { Trash2, Download, Eye, Pencil, X, Search, CalendarPlus, Plus } from "lucide-react";
 import { ShimmerLeadList, BtnSpinner } from "../components/ui/Shimmer";
+import GstPicker from "./GstPicker";
+import { PROJECT_STAGES, PROJECT_STAGE_COLOR, projectStageLabel, projectStagePatch } from "./projectStages";
+import { calcRemaining } from "./gst";
 import "./AllLeads.css";
 
 const API_BASE = import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5000";
@@ -42,21 +45,13 @@ const initials = (name = "") => {
   } catch { return "?"; }
 };
 
-const STAGE_COLOR = {
-  "Lead Capture": { bg: "#eaf1ff", color: "#2457e6" },
-  Reachable:      { bg: "#e8faef", color: "#0a9b52" },
-  Qualified:      { bg: "#fff4df", color: "#de8a00" },
-  Proposal:       { bg: "#f2eaff", color: "#7c3aed" },
-  Closed:         { bg: "#e7f7ef", color: "#0c9f61" },
-};
-
 const PRIO_COLOR = { Hot: "#ef4444", Warm: "#f59e0b", Cold: "#64748b" };
 
 const EMPTY_EDIT_FORM = {
   _id: "", name: "", phone: "", email: "", business: "",
   industry: "", location: "", requirements: "",
   branch: "Bangalore", source: "WhatsApp",
-  stage: "Lead Capture", priority: "Hot", value: "", days: "0d", rep: "",
+  stage: "Lead Capture", projectStage: "", priority: "Hot", value: "", days: "0d", rep: "",
   advanceReceived: "", advanceReceivedDate: "", agreedTimeline: "",
   onboardedDate: "", projectCompleted: false, projectCompletionDate: "",
   gstApplicable: false, gstRate: 18,
@@ -84,11 +79,9 @@ const addDays = (dateVal, days) => {
 };
 
 const BRANCHES     = ["All", "Mysore", "Bangalore", "Mumbai"];
-const STAGES       = ["All", "Lead Capture", "Reachable", "Qualified", "Proposal", "Closed"];
 const PRIORITIES   = ["All", "Hot", "Warm", "Cold"];
 const SOURCES      = ["All", "Referral", "WhatsApp", "Website", "Call", "Instagram", "Social", "Form", "Phone"];
 const EDIT_BRANCHES  = ["Mysore", "Bangalore", "Mumbai"];
-const EDIT_STAGES    = ["Lead Capture", "Reachable", "Qualified", "Proposal", "Closed"];
 const EDIT_PRIORITIES = ["Hot", "Warm", "Cold"];
 const EDIT_SOURCES   = ["WhatsApp", "Website", "Call", "Instagram", "Referral"];
 
@@ -96,7 +89,9 @@ export default function AllLeads() {
   const [searchParams] = useSearchParams();
   const [filters, setFilters] = useState(() => ({
     branch: "All", priority: "All", source: "All", bant: "All", rep: "All", q: "",
+    // Sales stage is still honoured from links like /leads?stage=Proposal
     stage: searchParams.get("stage") || "All",
+    projectStage: "All",
   }));
   const [rows, setRows]               = useState([]);
   const [loading, setLoading]         = useState(false);
@@ -125,6 +120,7 @@ export default function AllLeads() {
   const [addForm, setAddForm] = useState({
     name: "", phone: "", email: "", business: "", industry: "", location: "", requirements: "",
     branch: "Bangalore", source: "WhatsApp", stage: "Lead Capture", priority: "Hot", value: "", rep: "",
+    gstApplicable: false, gstRate: 18,
     leadDateTime: nowLocal(),
   });
 
@@ -132,6 +128,7 @@ export default function AllLeads() {
     const p = new URLSearchParams();
     p.set("branch",   filters.branch);
     p.set("stage",    filters.stage);
+    p.set("projectStage", filters.projectStage);
     p.set("priority", filters.priority);
     p.set("source",   filters.source);
     p.set("bant",     filters.bant);
@@ -174,6 +171,7 @@ export default function AllLeads() {
         branch:          x.branch          || "—",
         source:          x.source          || "—",
         stage:           x.stage           || "—",
+        projectStage:    x.projectStage    || "",
         bant:            x.bant            || "—",
         priority:        x.priority        || "—",
         value:           Number(x.value    || 0),
@@ -275,7 +273,7 @@ export default function AllLeads() {
   const closeEditModal = () => { setEditOpen(false); setEditForm(EMPTY_EDIT_FORM); };
   const closeAddModal  = () => {
     setAddOpen(false);
-    setAddForm({ name: "", phone: "", email: "", business: "", industry: "", location: "", requirements: "", branch: "Bangalore", source: "WhatsApp", stage: "Lead Capture", priority: "Hot", value: "", rep: "", leadDateTime: nowLocal() });
+    setAddForm({ name: "", phone: "", email: "", business: "", industry: "", location: "", requirements: "", branch: "Bangalore", source: "WhatsApp", stage: "Lead Capture", projectStage: "", priority: "Hot", value: "", rep: "", gstApplicable: false, gstRate: 18, leadDateTime: nowLocal() });
   };
 
   const handleEditLead = async (e, id) => {
@@ -298,6 +296,7 @@ export default function AllLeads() {
         branch:              l.branch             || "Bangalore",
         source:              l.source             || "WhatsApp",
         stage:               l.stage              || "Lead Capture",
+        projectStage:        l.projectStage       || "",
         priority:            l.priority           || "Hot",
         value:               l.value > 0          ? Number(l.value) : "",
         days:                l.days               || "0d",
@@ -335,6 +334,7 @@ export default function AllLeads() {
           branch:              editForm.branch,
           source:              editForm.source,
           stage:               editForm.stage,
+          projectStage:        editForm.projectStage,
           priority:            editForm.priority,
           value:               Number(editForm.value || 0),
           days:                editForm.days,
@@ -427,17 +427,17 @@ export default function AllLeads() {
 
         {/* ── Stage tabs + compact filters ── */}
         <div className="alFilterRow">
-          {/* Stage pills */}
+          {/* Project stage pills */}
           <div className="alStagePills">
-            {STAGES.map(s => {
-              const active = filters.stage === s;
-              const c = STAGE_COLOR[s];
+            {["All", "none", ...PROJECT_STAGES].map(s => {
+              const active = filters.projectStage === s;
+              const c = PROJECT_STAGE_COLOR[s === "none" ? "" : s];
               return (
                 <button key={s} type="button"
                   className={`alStagePill ${active ? "active" : ""}`}
                   style={active && c ? { background: c.bg, color: c.color, borderColor: c.color + "55" } : {}}
-                  onClick={() => setFilters(p => ({ ...p, stage: s }))}>
-                  {s === "All" ? "All Stages" : s}
+                  onClick={() => setFilters(p => ({ ...p, projectStage: s, stage: "All" }))}>
+                  {s === "All" ? "All Projects" : s === "none" ? "Not Started" : s}
                 </button>
               );
             })}
@@ -485,7 +485,7 @@ export default function AllLeads() {
                       <th>Date</th>
                       <th>Business Name</th>
                       <th>Client Name</th>
-                      <th>Stage</th>
+                      <th>Project Stage</th>
                       <th>Date Onboarded</th>
                       <th>Rep</th>
                       <th>Actions</th>
@@ -508,9 +508,9 @@ export default function AllLeads() {
                             <div className="alRowPhone">{r.phone}</div>
                           </td>
                           <td>
-                            {(() => { const sc = STAGE_COLOR[r.stage] || {}; return (
-                              <span className="alRowStage" style={{ background: sc.bg || "#f1f5f9", color: sc.color || "#64748b" }}>
-                                {r.stage}
+                            {(() => { const sc = PROJECT_STAGE_COLOR[r.projectStage] || PROJECT_STAGE_COLOR[""]; return (
+                              <span className="alRowStage" style={{ background: sc.bg, color: sc.color }}>
+                                {projectStageLabel(r.projectStage)}
                               </span>
                             ); })()}
                           </td>
@@ -606,13 +606,28 @@ export default function AllLeads() {
                   <div className="fg"><label>Location</label><input name="location" value={editForm.location} onChange={e => setEditForm(p => ({ ...p, location: e.target.value }))}/></div>
                   <div className="fg"><label>Branch</label><select value={editForm.branch} onChange={e => setEditForm(p => ({ ...p, branch: e.target.value }))}>{EDIT_BRANCHES.map(x => <option key={x}>{x}</option>)}</select></div>
                   <div className="fg"><label>Source</label><select value={editForm.source} onChange={e => setEditForm(p => ({ ...p, source: e.target.value }))}>{EDIT_SOURCES.map(x => <option key={x}>{x}</option>)}</select></div>
-                  <div className="fg"><label>Stage</label><select value={editForm.stage} onChange={e => setEditForm(p => ({ ...p, stage: e.target.value }))}>{EDIT_STAGES.map(x => <option key={x}>{x}</option>)}</select></div>
+                  <div className="fg">
+                    <label>Project Stage</label>
+                    <select value={editForm.projectStage} onChange={e => setEditForm(p => ({ ...p, ...projectStagePatch(p, e.target.value) }))}>
+                      <option value="">Not Started</option>
+                      {PROJECT_STAGES.map(x => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                  </div>
                   <div className="fg"><label>Priority</label><select value={editForm.priority} onChange={e => setEditForm(p => ({ ...p, priority: e.target.value }))}>{EDIT_PRIORITIES.map(x => <option key={x}>{x}</option>)}</select></div>
-                  <div className="fg"><label>Total Amount Agreed (₹)</label><input type="number" value={editForm.value} onChange={e => setEditForm(p => ({ ...p, value: e.target.value }))}/></div>
+                  <div className="fg"><label>Total Amount Agreed (₹) {editForm.gstApplicable ? "— excl. GST" : ""}</label><input type="number" value={editForm.value} onChange={e => setEditForm(p => ({ ...p, value: e.target.value }))}/></div>
                   <div className="fg"><label>Rep</label><select value={editForm.rep} onChange={e => setEditForm(p => ({ ...p, rep: e.target.value }))}><option value="">Select Rep</option>{repOptions.filter(x => x !== "All").map(x => <option key={x}>{x}</option>)}</select></div>
+                  <div className="fg full">
+                    <label>GST</label>
+                    <GstPicker
+                      value={editForm.value}
+                      gstApplicable={editForm.gstApplicable}
+                      gstRate={editForm.gstRate}
+                      onChange={patch => setEditForm(p => ({ ...p, ...patch }))}
+                    />
+                  </div>
                   <div className="fg"><label>Advance Received (₹)</label><input type="number" value={editForm.advanceReceived} onChange={e => setEditForm(p => ({ ...p, advanceReceived: e.target.value }))}/></div>
                   <div className="fg"><label>Advance Received Date</label><input type="date" value={editForm.advanceReceivedDate} onChange={e => setEditForm(p => ({ ...p, advanceReceivedDate: e.target.value }))}/></div>
-                  <div className="fg"><label>Remaining Balance (₹)</label><input type="number" readOnly value={editForm.value !== "" && editForm.advanceReceived !== "" ? Math.max(0, Number(editForm.value) - Number(editForm.advanceReceived)) : ""} className="alReadOnly"/></div>
+                  <div className="fg"><label>Remaining Balance (₹){editForm.gstApplicable ? " — incl. GST" : ""}</label><input type="number" readOnly value={editForm.value !== "" ? calcRemaining(editForm.value, editForm.advanceReceived, editForm.gstApplicable, editForm.gstRate) : ""} className="alReadOnly"/></div>
                   <div className="fg"><label>Agreed Timeline (days)</label><input type="number" min="0" value={editForm.agreedTimeline} onChange={e => setEditForm(p => ({ ...p, agreedTimeline: e.target.value }))}/></div>
                   {editForm.advanceReceivedDate && editForm.agreedTimeline ? (
                     <div className="fg alFinalPayRow">
@@ -623,55 +638,15 @@ export default function AllLeads() {
                   <div className="fg"><label>Client Onboarded Date</label><input type="date" value={editForm.onboardedDate} onChange={e => setEditForm(p => ({ ...p, onboardedDate: e.target.value }))}/></div>
                   <div className="fg"><label>Project Completion Date</label><input type="date" value={editForm.projectCompletionDate} onChange={e => setEditForm(p => ({ ...p, projectCompletionDate: e.target.value }))}/></div>
                   <div className="fg full" style={{flexDirection:"row",alignItems:"center",gap:10}}>
-                    <input type="checkbox" id="alProjDone" checked={editForm.projectCompleted} onChange={e => setEditForm(p => ({ ...p, projectCompleted: e.target.checked }))} style={{width:16,height:16,accentColor:"#2563eb",cursor:"pointer"}}/>
+                    <input type="checkbox" id="alProjDone" checked={editForm.projectCompleted} onChange={e => {
+                      const checked = e.target.checked;
+                      // Keep the project stage in step with the checkbox
+                      setEditForm(p => checked
+                        ? { ...p, ...projectStagePatch(p, "Project Completed") }
+                        : { ...p, projectCompleted: false, ...(p.projectStage === "Project Completed" ? { projectStage: "Deployed / Live" } : {}) });
+                    }} style={{width:16,height:16,accentColor:"#2563eb",cursor:"pointer"}}/>
                     <label htmlFor="alProjDone" style={{marginBottom:0,cursor:"pointer",textTransform:"none",fontSize:"13px",fontWeight:700,color:"#374151",letterSpacing:0}}>Project Completed</label>
                   </div>
-                  <div className="fg full">
-                    <label>GST Applicable</label>
-                    <div style={{display:"flex",gap:10,marginTop:4}}>
-                      <button type="button" onClick={() => setEditForm(p => ({...p, gstApplicable: true}))} style={{flex:1,padding:"8px 0",borderRadius:8,border:"1.5px solid",borderColor:editForm.gstApplicable?"#2563eb":"#d1d5db",background:editForm.gstApplicable?"#eff6ff":"#fff",color:editForm.gstApplicable?"#2563eb":"#6b7280",fontWeight:600,fontSize:13,cursor:"pointer"}}>With GST</button>
-                      <button type="button" onClick={() => setEditForm(p => ({...p, gstApplicable: false}))} style={{flex:1,padding:"8px 0",borderRadius:8,border:"1.5px solid",borderColor:!editForm.gstApplicable?"#2563eb":"#d1d5db",background:!editForm.gstApplicable?"#eff6ff":"#fff",color:!editForm.gstApplicable?"#2563eb":"#6b7280",fontWeight:600,fontSize:13,cursor:"pointer"}}>Without GST</button>
-                    </div>
-                  </div>
-                  {editForm.gstApplicable && (
-                    <>
-                      <div className="fg">
-                        <label>GST Rate (%)</label>
-                        <select value={editForm.gstRate} onChange={e => setEditForm(p => ({...p, gstRate: Number(e.target.value)}))}>
-                          <option value={5}>5%</option>
-                          <option value={12}>12%</option>
-                          <option value={18}>18%</option>
-                          <option value={28}>28%</option>
-                        </select>
-                      </div>
-                      <div className="fg">
-                        <label>GST Amount (₹)</label>
-                        <input
-                          type="text"
-                          readOnly
-                          className="alReadOnly"
-                          value={
-                            editForm.value !== "" && !Number.isNaN(Number(editForm.value))
-                              ? Math.round((Number(editForm.value) * Number(editForm.gstRate || 0)) / 100).toLocaleString("en-IN")
-                              : ""
-                          }
-                        />
-                      </div>
-                      <div className="fg full">
-                        <label>Final Amount (incl. GST) (₹)</label>
-                        <input
-                          type="text"
-                          readOnly
-                          className="alReadOnly alGstTotal"
-                          value={
-                            editForm.value !== "" && !Number.isNaN(Number(editForm.value))
-                              ? Math.round(Number(editForm.value) * (1 + Number(editForm.gstRate || 0) / 100)).toLocaleString("en-IN")
-                              : ""
-                          }
-                        />
-                      </div>
-                    </>
-                  )}
                   <div className="fg full"><label>Requirements</label><textarea value={editForm.requirements} onChange={e => setEditForm(p => ({ ...p, requirements: e.target.value }))} rows={3}/></div>
                 </div>
                 <div className="alModalFooter">
@@ -704,10 +679,25 @@ export default function AllLeads() {
                 <div className="fg"><label>Location</label><input value={addForm.location} onChange={e => setAddForm(p => ({ ...p, location: e.target.value }))}/></div>
                 <div className="fg"><label>Branch</label><select value={addForm.branch} onChange={e => setAddForm(p => ({ ...p, branch: e.target.value }))}>{EDIT_BRANCHES.map(x => <option key={x}>{x}</option>)}</select></div>
                 <div className="fg"><label>Source</label><select value={addForm.source} onChange={e => setAddForm(p => ({ ...p, source: e.target.value }))}>{EDIT_SOURCES.map(x => <option key={x}>{x}</option>)}</select></div>
-                <div className="fg"><label>Stage</label><select value={addForm.stage} onChange={e => setAddForm(p => ({ ...p, stage: e.target.value }))}>{EDIT_STAGES.map(x => <option key={x}>{x}</option>)}</select></div>
+                <div className="fg">
+                  <label>Project Stage</label>
+                  <select value={addForm.projectStage || ""} onChange={e => setAddForm(p => ({ ...p, projectStage: e.target.value }))}>
+                    <option value="">Not Started</option>
+                    {PROJECT_STAGES.map(x => <option key={x} value={x}>{x}</option>)}
+                  </select>
+                </div>
                 <div className="fg"><label>Priority</label><select value={addForm.priority} onChange={e => setAddForm(p => ({ ...p, priority: e.target.value }))}>{EDIT_PRIORITIES.map(x => <option key={x}>{x}</option>)}</select></div>
-                <div className="fg"><label>Value (₹)</label><input type="number" value={addForm.value} onChange={e => setAddForm(p => ({ ...p, value: e.target.value }))}/></div>
+                <div className="fg"><label>Total Amount Agreed (₹) {addForm.gstApplicable ? "— excl. GST" : ""}</label><input type="number" value={addForm.value} onChange={e => setAddForm(p => ({ ...p, value: e.target.value }))}/></div>
                 <div className="fg"><label>Rep</label><select value={addForm.rep} onChange={e => setAddForm(p => ({ ...p, rep: e.target.value }))}><option value="">Select Rep</option>{repOptions.filter(x => x !== "All").map(x => <option key={x}>{x}</option>)}</select></div>
+                <div className="fg full">
+                  <label>GST</label>
+                  <GstPicker
+                    value={addForm.value}
+                    gstApplicable={!!addForm.gstApplicable}
+                    gstRate={addForm.gstRate || 18}
+                    onChange={patch => setAddForm(p => ({ ...p, ...patch }))}
+                  />
+                </div>
                 <div className="fg full"><label>Requirements</label><textarea value={addForm.requirements} onChange={e => setAddForm(p => ({ ...p, requirements: e.target.value }))} rows={3}/></div>
                 <div className="fg full"><label>Lead Date &amp; Time</label><input type="datetime-local" value={addForm.leadDateTime} onChange={e => setAddForm(p => ({ ...p, leadDateTime: e.target.value }))}/></div>
               </div>
