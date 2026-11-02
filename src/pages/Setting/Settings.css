@@ -347,3 +347,25 @@
 .st-toast       { display:flex; align-items:center; gap:8px; padding:11px 16px; border-radius:9px; font-size:13px; font-weight:500; box-shadow:0 4px 16px rgba(0,0,0,.12); animation:st-in .2s ease; }
 .st-toast-success { background:#fff; border:1px solid #bbf7d0; color:#15803d; }
 .st-toast-error   { background:#fff; border:1px solid #fecaca; color:#dc2626; }
+
+/* ── Developers tab ── */
+.st-dev-row { cursor: pointer; }
+.st-dev-row:hover td { background: #f8fafc; }
+.st-dev-skills { font-size: 11px; color: #94a3b8; font-weight: 500; }
+.st-dev-stage { display: inline-block; border-radius: 20px; padding: 2px 9px; font-size: 10px; font-weight: 700; white-space: nowrap; }
+.st-dev-expand td { background: #fafbff; }
+.st-dev-projects { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px; }
+.st-dev-project {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px 10px; font-size: 13px;
+}
+.st-dev-project.done { opacity: .7; }
+.st-dev-pick { margin-top: 8px; max-height: 260px; overflow-y: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+.st-dev-pick-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; cursor: pointer;
+  border-bottom: 1px solid #f1f5f9; font-size: 13px;
+}
+.st-dev-pick-item:last-child { border-bottom: none; }
+.st-dev-pick-item:hover { background: #f8fafc; }
+.st-dev-pick-item.checked { background: #eff6ff; }
+.st-dev-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

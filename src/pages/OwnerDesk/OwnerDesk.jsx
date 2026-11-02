@@ -72,17 +72,36 @@ export default function OwnerDesk() {
   const fetchData = useCallback(async (ref=false) => {
     try {
       if(ref) setRefreshing(true); else setLoading(true);
-      const [dr,nr,pr] = await Promise.all([
-        fetch(`${API}/api/owner-desk`,                              { headers:auth() }),
-        fetch(`${API}/api/owner-desk/notes`,                        { headers:auth() }),
-        fetch(`${API}/api/owner-desk/payment-expected`,            { headers:auth() }),
+      // Each request is independent so one failure doesn't blank the whole desk.
+      // Retries cover Render cold starts, where the proxy returns 502/503 HTML.
+      const getJSON = async (path, tries=3) => {
+        for (let i=1;; i++) {
+          try {
+            const r = await fetch(`${API}${path}`, { headers:auth() });
+            if (r.status >= 500 && i < tries) throw new Error(`HTTP ${r.status}`);
+            const j = await r.json().catch(() => { throw new Error(`HTTP ${r.status} (non-JSON response)`); });
+            if (!j.success) throw Object.assign(new Error(j.message || `HTTP ${r.status}`), { final:true });
+            return j;
+          } catch (e) {
+            if (e.final || i >= tries) throw e;
+            await new Promise(res => setTimeout(res, 2000*i));
+          }
+        }
+      };
+      const [d,n,p] = await Promise.allSettled([
+        getJSON("/api/owner-desk"),
+        getJSON("/api/owner-desk/notes"),
+        getJSON("/api/owner-desk/payment-expected"),
       ]);
-      const [dj,nj,pj] = await Promise.all([dr.json(),nr.json(),pr.json()]);
-      if(dj.success) setData(dj);
-      if(nj.success) setNotes(nj.notes||[]);
-      if(pj.success) setPayExpected(pj.entries||[]);
-    } catch { toast.error("Failed to load"); }
-    finally { setLoading(false); setRefreshing(false); }
+      if(d.status==="fulfilled") setData(d.value);
+      if(n.status==="fulfilled") setNotes(n.value.notes||[]);
+      if(p.status==="fulfilled") setPayExpected(p.value.entries||[]);
+      const failed = [["Desk",d],["Notes",n],["Payments",p]].filter(([,r])=>r.status==="rejected");
+      if(failed.length) {
+        failed.forEach(([k,r]) => console.error(`[OwnerDesk] ${k} failed:`, r.reason));
+        toast.error(`Failed to load ${failed.map(([k])=>k).join(", ")}: ${failed[0][1].reason?.message || "network error"}`);
+      }
+    } finally { setLoading(false); setRefreshing(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);

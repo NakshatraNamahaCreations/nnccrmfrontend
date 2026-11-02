@@ -1,12 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { X, Plus, Trash2, Eye, EyeOff } from "lucide-react";
 import { toast } from "../../utils/toast";
-import { api, CATEGORIES, CATEGORY_META, STATUS_META } from "./integrationMeta";
+import { api, API, CATEGORIES, CATEGORY_META, STATUS_META } from "./integrationMeta";
 
 const toDateInput = (d) => (d ? String(d).slice(0, 10) : "");
 const secretRows = (labels) => labels.map(label => ({ label, value: "", hasValue: false }));
 
-/** Add / edit one integration of a project (opened from the project's Integrations tab) */
+/**
+ * Add / edit one integration of a project.
+ * Opened from a project's Integrations tab (leadId given), or from the
+ * Integrations page without a leadId — then the user picks the project here.
+ */
 export default function IntegrationFormModal({ initial, leadId, leadName, onSaved, onClose }) {
   const editing = !!initial?._id;
   const [form, setForm] = useState(() => ({
@@ -29,6 +33,21 @@ export default function IntegrationFormModal({ initial, leadId, leadName, onSave
   );
   const [showValues, setShowValues] = useState(false);
   const [saving, setSaving] = useState(false);
+  const pickProject = !editing && !leadId;
+  const [projectId, setProjectId] = useState("");
+  const [projects, setProjects]   = useState([]);
+
+  useEffect(() => {
+    if (!pickProject) return;
+    const token = localStorage.getItem("nnc_token");
+    fetch(`${API}/api/leads?limit=200`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then(r => r.json())
+      .then(json => {
+        const list = (json.data || []).map(l => ({ _id: l._id || l.id, name: l.name, business: l.business || l.company || "" }));
+        setProjects(list.sort((a, b) => String(a.name).localeCompare(String(b.name))));
+      })
+      .catch(() => toast.error("Could not load projects"));
+  }, [pickProject]);
 
   const set =(k, v) => setForm(f => ({ ...f, [k]: v }));
 
@@ -43,12 +62,13 @@ export default function IntegrationFormModal({ initial, leadId, leadName, onSave
 
   const save = async (e) => {
     e.preventDefault();
+    if (pickProject && !projectId) return toast.warning("Select a project");
     if (!form.service.trim()) return toast.warning("Service name is required");
     setSaving(true);
     try {
       const body = {
         ...form,
-        lead: leadId,
+        lead: leadId || projectId,
         cost: form.cost === "" ? 0 : Number(form.cost),
         renewalDate: form.renewalDate || null,
         // Blank value on an existing secret = keep the stored one
@@ -60,7 +80,7 @@ export default function IntegrationFormModal({ initial, leadId, leadName, onSave
         ? await api(`/${initial._id}`, { method: "PUT", body })
         : await api("", { method: "POST", body });
       toast.success(editing ? "Integration updated" : "Integration added");
-      onSaved(json.data);
+      onSaved(json.data, projects.find(p => p._id === projectId));
       onClose();
     } catch (err) {
       toast.error(err.message || "Save failed");
@@ -81,6 +101,18 @@ export default function IntegrationFormModal({ initial, leadId, leadName, onSave
         </div>
 
         <div className="intg-modal-body">
+          {pickProject && (
+            <div className="intg-field">
+              <label>Project *</label>
+              <select value={projectId} onChange={e => setProjectId(e.target.value)} required>
+                <option value="">{projects.length ? "Select a project…" : "Loading projects…"}</option>
+                {projects.map(p => (
+                  <option key={p._id} value={p._id}>{p.name}{p.business ? ` — ${p.business}` : ""}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="intg-field">
             <label>Type</label>
             <div className="intg-cat-grid">

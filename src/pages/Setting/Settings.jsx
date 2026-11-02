@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useState } from "react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import {
   User, Users, Building2, DollarSign, Target,
   FileBarChart2, Save, Plus, Trash2, Edit3, Eye, EyeOff,
-  CheckCircle2, XCircle, RefreshCcw, Send, Shield, X, UserCheck, Receipt, Landmark,
+  CheckCircle2, XCircle, RefreshCcw, Send, Shield, X, UserCheck, Receipt, Landmark, Code2,
 } from "lucide-react";
+import { PROJECT_STAGE_COLOR, projectStageLabel } from "../../Leads/projectStages";
 import "./Settings.css";
 
 const API   = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -915,6 +916,218 @@ function RepsTab({ toast }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// TAB — Developers (who works on which project)
+// ══════════════════════════════════════════════════════════════════════════════
+const DEV_ROLES = ["Full Stack","Frontend","Backend","Mobile App","UI/UX Designer","WordPress / CMS","Tester / QA","Other"];
+const isDone = p => p.projectCompleted || p.projectStage === "Project Completed";
+
+function StagePill({ p }) {
+  const c = PROJECT_STAGE_COLOR[p.projectStage || ""] || PROJECT_STAGE_COLOR[""];
+  return <span className="st-dev-stage" style={{ background:c.bg, color:c.color }}>{projectStageLabel(p.projectStage)}</span>;
+}
+
+function DevelopersTab({ toast }) {
+  const [devs,     setDevs]     = useState([]);
+  const [projects, setProjects] = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [modal,    setModal]    = useState(null);
+  const [del,      setDel]      = useState(null);
+  const [open,     setOpen]     = useState(null);   // expanded developer id
+  const [pSearch,  setPSearch]  = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [d, p] = await Promise.all([api("GET", "/api/developers"), api("GET", "/api/leads?limit=200")]);
+      if (d.success) setDevs(d.data || []);
+      if (p.success) setProjects((p.data || []).sort((a, b) => String(a.name).localeCompare(String(b.name))));
+    } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const blank = { name:"", role:"Full Stack", email:"", phone:"", branch:"", skills:"", isActive:true, projectIds:[] };
+  const openCreate = () => { setPSearch(""); setModal({ mode:"create", data:blank }); };
+  const openEdit   = d  => { setPSearch(""); setModal({ mode:"edit", data:{ ...d, projectIds: d.projects.map(p => p._id) } }); };
+  const setData    = patch => setModal(m => ({ ...m, data:{ ...m.data, ...patch } }));
+  const toggleProject = id => setModal(m => {
+    const cur = m.data.projectIds;
+    return { ...m, data:{ ...m.data, projectIds: cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id] } };
+  });
+
+  const save = async (data) => {
+    if (!data.name.trim()) return toast("error", "Name is required");
+    const isCreate = modal.mode === "create";
+    try {
+      const j = await api(isCreate ? "POST" : "PUT", isCreate ? "/api/developers" : `/api/developers/${data._id}`, data);
+      if (!j.success) throw new Error(j.message);
+      toast("success", isCreate ? "Developer added" : "Developer updated");
+      setModal(null); load();
+    } catch(e) { toast("error", e.message || "Failed"); }
+  };
+
+  const confirmDel = async () => {
+    try {
+      const j = await api("DELETE", `/api/developers/${del._id}`);
+      if (!j.success) throw new Error(j.message);
+      toast("success", "Developer removed");
+      setDel(null); load();
+    } catch(e) { toast("error", e.message || "Failed"); }
+  };
+
+  const q = pSearch.trim().toLowerCase();
+  const pickList = modal ? projects
+    .filter(p => !q || `${p.name} ${p.business || ""}`.toLowerCase().includes(q))
+    // assigned first
+    .sort((a, b) => Number(modal.data.projectIds.includes(b._id)) - Number(modal.data.projectIds.includes(a._id))) : [];
+
+  return (
+    <div className="st-tab-body">
+      <Section title="Developers" sub="Add developers and assign them to projects — see who is working on what">
+        <div className="st-table-toolbar">
+          <span className="st-count">{devs.length} developers · {devs.reduce((s, d) => s + d.activeProjects, 0)} active assignments</span>
+          <button className="st-btn-primary" onClick={openCreate}><Plus size={14}/> Add Developer</button>
+        </div>
+
+        {loading ? <div className="st-loading"><RefreshCcw size={18} className="st-spin"/> Loading…</div> :
+         devs.length === 0 ? <div className="st-empty">No developers yet. Click “Add Developer”.</div> :
+        <div className="st-table-wrap">
+          <table className="st-table">
+            <thead><tr>
+              <th>Name</th><th>Role</th><th>Contact</th><th>Projects</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody>
+              {devs.map(d => (
+                <Fragment key={d._id}>
+                  <tr className="st-dev-row" onClick={() => setOpen(o => o === d._id ? null : d._id)}>
+                    <td>
+                      <strong>{d.name}</strong>
+                      {d.skills && <div className="st-dev-skills">{d.skills}</div>}
+                    </td>
+                    <td><span className="st-pill">{d.role}</span></td>
+                    <td>
+                      <div>{d.phone || "—"}</div>
+                      {d.email && <div className="st-mono st-dev-skills">{d.email}</div>}
+                    </td>
+                    <td>
+                      {d.projects.length === 0 ? <span className="st-pill-none">Not assigned</span> : (
+                        <div className="st-pill-row">
+                          <span className="st-badge-green">{d.activeProjects} active</span>
+                          <span className="st-pill-more">{d.projects.length} total</span>
+                          {d.projects.slice(0, 2).map(p => <span key={p._id} className="st-pill">{p.name}</span>)}
+                          {d.projects.length > 2 && <span className="st-pill-more">+{d.projects.length - 2} more</span>}
+                        </div>
+                      )}
+                    </td>
+                    <td><span className={d.isActive ? "st-badge-green" : "st-badge-red"}>{d.isActive ? "Active" : "Inactive"}</span></td>
+                    <td>
+                      <div className="st-row-actions" onClick={e => e.stopPropagation()}>
+                        <button className="st-icon-btn" title="Edit / assign projects" onClick={() => openEdit(d)}><Edit3 size={14}/></button>
+                        <button className="st-icon-btn red" title="Remove" onClick={() => setDel(d)}><Trash2 size={14}/></button>
+                      </div>
+                    </td>
+                  </tr>
+                  {open === d._id && (
+                    <tr className="st-dev-expand"><td colSpan={6}>
+                      {d.projects.length === 0 ? <span className="st-dev-skills">No projects assigned. Click edit to assign.</span> : (
+                        <div className="st-dev-projects">
+                          {[...d.projects].sort((a, b) => Number(isDone(a)) - Number(isDone(b))).map(p => (
+                            <div key={p._id} className={`st-dev-project ${isDone(p) ? "done" : ""}`}>
+                              <div>
+                                <strong>{p.name}</strong>
+                                {(p.business || p.company) && <span className="st-dev-skills"> · {p.business || p.company}</span>}
+                              </div>
+                              <StagePill p={p}/>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </td></tr>
+                  )}
+                </Fragment>
+              ))}
+            </tbody>
+          </table>
+        </div>}
+      </Section>
+
+      {modal && (
+        <div className="st-overlay" onClick={() => setModal(null)}>
+          <div className="st-modal" onClick={e => e.stopPropagation()}>
+            <div className="st-modal-header">
+              <span>{modal.mode === "create" ? "Add Developer" : "Edit Developer"}</span>
+              <button className="st-modal-close" onClick={() => setModal(null)}><X size={16}/></button>
+            </div>
+            <div className="st-modal-body">
+              <div className="st-form-grid2">
+                <Field label="Full Name"><Input placeholder="e.g. Kiran Kumar" value={modal.data.name} onChange={e => setData({ name:e.target.value })}/></Field>
+                <Field label="Role">
+                  <Select value={modal.data.role} onChange={e => setData({ role:e.target.value })}>
+                    {DEV_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Phone (optional)"><Input placeholder="+91 98765 43210" value={modal.data.phone || ""} onChange={e => setData({ phone:e.target.value })}/></Field>
+                <Field label="Email (optional)"><Input type="email" placeholder="dev@nnc.in" value={modal.data.email || ""} onChange={e => setData({ email:e.target.value })}/></Field>
+                <Field label="Branch (optional)">
+                  <Select value={modal.data.branch || ""} onChange={e => setData({ branch:e.target.value })}>
+                    <option value="">—</option>
+                    {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+                  </Select>
+                </Field>
+                <Field label="Skills (optional)"><Input placeholder="React, Node, Flutter…" value={modal.data.skills || ""} onChange={e => setData({ skills:e.target.value })}/></Field>
+              </div>
+
+              <Field label={`Assigned Projects (${modal.data.projectIds.length})`}>
+                <Input placeholder="Search projects…" value={pSearch} onChange={e => setPSearch(e.target.value)}/>
+                <div className="st-dev-pick">
+                  {pickList.length === 0 && <div className="st-dev-skills" style={{ padding:10 }}>No projects found.</div>}
+                  {pickList.map(p => {
+                    const checked = modal.data.projectIds.includes(p._id);
+                    return (
+                      <label key={p._id} className={`st-dev-pick-item ${checked ? "checked" : ""}`}>
+                        <input type="checkbox" checked={checked} onChange={() => toggleProject(p._id)}/>
+                        <span className="st-dev-pick-name">
+                          <strong>{p.name}</strong>
+                          {(p.business || p.company) && <span className="st-dev-skills"> · {p.business || p.company}</span>}
+                        </span>
+                        <StagePill p={p}/>
+                      </label>
+                    );
+                  })}
+                </div>
+              </Field>
+
+              <Field label="Status">
+                <div className="st-toggle-row">
+                  <button className={`st-toggle ${modal.data.isActive ? "active" : ""}`} onClick={() => setData({ isActive:true })}>Active</button>
+                  <button className={`st-toggle ${!modal.data.isActive ? "active" : ""}`} onClick={() => setData({ isActive:false })}>Inactive</button>
+                </div>
+              </Field>
+            </div>
+            <div className="st-modal-footer">
+              <button className="st-btn-ghost" onClick={() => setModal(null)}>Cancel</button>
+              <button className="st-btn-primary" onClick={() => save(modal.data)}><Save size={14}/> Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {del && (
+        <div className="st-overlay" onClick={() => setDel(null)}>
+          <div className="st-confirm-box" onClick={e => e.stopPropagation()}>
+            <div className="st-confirm-title">Remove Developer</div>
+            <p>Remove <strong>{del.name}</strong>? They will be unassigned from {del.projects.length} project{del.projects.length === 1 ? "" : "s"}. To keep the history, set them Inactive instead.</p>
+            <div className="st-confirm-actions">
+              <button className="st-btn-ghost" onClick={() => setDel(null)}>Cancel</button>
+              <button className="st-btn-danger" onClick={confirmDel}>Remove</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // TAB 8 — Invoice Series
 // ══════════════════════════════════════════════════════════════════════════════
 // ── Company Info Tab ──────────────────────────────────────────────────────────
@@ -1229,6 +1442,7 @@ const TABS = [
   { key:"profile",   label:"Profile",          icon:User         },
   { key:"users",     label:"User Management",  icon:Users        },
   { key:"reps",      label:"Sales Reps",       icon:UserCheck    },
+  { key:"developers",label:"Developers",       icon:Code2        },
   { key:"branch",    label:"Branch & Rent",    icon:Building2    },
   { key:"financial", label:"Financial Config", icon:DollarSign   },
   { key:"targets",   label:"Targets",          icon:Target       },
@@ -1289,6 +1503,7 @@ export default function Settings() {
             {tab === "profile"   && <ProfileTab   toast={toast}/>}
             {tab === "users"     && <UsersTab      toast={toast}/>}
             {tab === "reps"      && <RepsTab       toast={toast}/>}
+            {tab === "developers"&& <DevelopersTab toast={toast}/>}
             {tab === "branch"    && <BranchTab     toast={toast}/>}
             {tab === "financial" && <FinancialTab  toast={toast}/>}
             {tab === "targets"   && <TargetsTab    toast={toast}/>}

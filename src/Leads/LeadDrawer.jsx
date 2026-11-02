@@ -4,6 +4,8 @@ import "./LeadDrawer.css";
 import GstPicker from "./GstPicker";
 import { calcGst, calcRemaining } from "./gst";
 import ProjectIntegrations from "../pages/Integrations/ProjectIntegrations";
+import ProjectBilling from "../pages/ProjectBilling/ProjectBilling";
+import ProjectDevelopers from "./ProjectDevelopers";
 import { PROJECT_STAGES, PROJECT_STAGE_COLOR, projectStageLabel, projectStagePatch } from "./projectStages";
 
 const money = (n) => {
@@ -690,7 +692,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
           </div>
 
           <div className="ldTabs">
-            {["Profile", "BANT", "Follow-up", "Calls/WA", "History", "Emails", "Docs", "Notes", "Integrations"].map((t) => (
+            {["Profile", "BANT", "Follow-up", "Calls/WA", "History", "Emails", "Docs", "Notes", "Extras & Monthly", "Integrations"].map((t) => (
               <button
                 key={t}
                 type="button"
@@ -714,7 +716,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
 
             {!loading && !err && lead ? (
               <>
-                {activeTab === "Profile" && <ProfileTab lead={lead} />}
+                {activeTab === "Profile" && (<><ProjectDevelopers lead={lead} /><ProfileTab lead={lead} /></>)}
                 {activeTab === "BANT" && <BantTab lead={lead} onBantSave={saveBant} />}
                 {activeTab === "Follow-up" && (
                   <FollowupTab
@@ -774,6 +776,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                     saveNote={saveNote}
                   />
                 )}
+                {activeTab === "Extras & Monthly" && <ProjectBilling lead={lead} />}
                 {activeTab === "Integrations" && <ProjectIntegrations lead={lead} />}
               </>
             ) : null}

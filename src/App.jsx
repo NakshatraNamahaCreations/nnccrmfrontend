@@ -24,6 +24,8 @@ import AttendancePage from "./pages/Attendance/AttendancePage";
 import FundsPage      from "./pages/Funds/FundsPage";
 import OwnerDesk        from "./pages/OwnerDesk/OwnerDesk";
 import CredentialVault  from "./pages/CredentialVault/CredentialVault";
+import IntegrationsPage  from "./pages/Integrations/IntegrationsPage";
+import MonthlyBillingPage from "./pages/ProjectBilling/MonthlyBillingPage";
 
 function isAuthed() {
   try {
@@ -99,6 +101,23 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/monthly-billing"
+        element={
+          <ProtectedRoute>
+            <MonthlyBillingPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/integrations"
+        element={
+          <ProtectedRoute>
+            <IntegrationsPage />
+          </ProtectedRoute>
+        }
+      />
+
 
       <Route
         path="/leads"

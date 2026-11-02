@@ -52,7 +52,7 @@ function SecretRow({ integrationId, secret, canReveal }) {
   );
 }
 
-function IntegrationCard({ item, canEdit, onEdit, onDelete }) {
+export function IntegrationCard({ item, canEdit, onEdit, onDelete }) {
   const meta = CATEGORY_META[item.category] || CATEGORY_META.Other;
   const st   = STATUS_META[item.status] || STATUS_META.pending;
   const ren  = renewalState(item.renewalDate);

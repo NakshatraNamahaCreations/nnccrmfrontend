@@ -1,0 +1,58 @@
+/* Billing after the original deal — builds on Integrations.css (intg-*) */
+
+.bill-modal { max-width: 560px; }
+.bill-check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; color: #334155; cursor: pointer; }
+
+/* Project money summary (drawer tab) */
+.bill-summary {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px;
+}
+.bill-summary > div, .bill-figs > div {
+  display: flex; flex-direction: column; gap: 2px; padding: 8px 10px;
+  background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; min-width: 0;
+}
+.bill-summary > div.hl { background: #eef2ff; border-color: #c7d2fe; }
+.bill-summary span, .bill-figs span { font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .3px; }
+.bill-summary strong { font-size: 15px; font-weight: 800; color: #0f172a; }
+.bill-figs strong { font-size: 13px; font-weight: 800; color: #0f172a; }
+.bill-summary .ok, .bill-figs .ok { color: #059669; }
+.bill-summary .due, .bill-figs .due { color: #dc2626; }
+.bill-section { margin-top: 10px; padding-top: 14px; border-top: 1px dashed #e2e8f0; }
+
+.bill-figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px; }
+
+.bill-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bill-actions select {
+  padding: 7px 10px; border: 1px solid #e2e8f0; border-radius: 8px; background: #fff;
+  font-size: 12px; font-weight: 600; color: #334155; cursor: pointer;
+}
+.intg-card.bill-stopped { opacity: .75; }
+
+.bill-pay-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.bill-pay-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-size: 12px; color: #475569; background: #f0fdf4; border-radius: 6px; padding: 4px 8px;
+}
+.bill-x { border: none; background: none; color: #94a3b8; cursor: pointer; padding: 2px; display: inline-flex; border-radius: 4px; }
+.bill-x:hover { color: #dc2626; background: #fee2e2; }
+
+/* Month-by-month dues */
+.bill-months { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; }
+.bill-month { border: 1px solid #f1f5f9; border-radius: 8px; padding: 6px 8px; display: flex; flex-direction: column; gap: 4px; }
+.bill-month-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 12px; }
+.bill-month-name { font-weight: 800; color: #0f172a; min-width: 70px; }
+.bill-month-due { color: #94a3b8; }
+.bill-month-amt { margin-left: auto; font-weight: 700; color: #334155; }
+
+/* Sidebar page */
+.bill-dash { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.intg-dash-card.extra::before { background: #7c3aed; }
+.bill-tabs { display: flex; gap: 6px; border-bottom: 1px solid #e2e8f0; }
+.bill-tabs button {
+  border: none; background: none; padding: 10px 14px; font-size: 13px; font-weight: 700; color: #64748b;
+  cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; font-family: inherit;
+}
+.bill-tabs button.active { color: #4f46e5; border-bottom-color: #4f46e5; }
+
+@media (max-width: 1100px) { .bill-dash { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 640px)  { .bill-dash { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

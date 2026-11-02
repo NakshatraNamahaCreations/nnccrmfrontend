@@ -23,6 +23,8 @@ import {
   ReceiptText,
   Briefcase,
   ShieldCheck,
+  Plug,
+  Repeat,
 } from "lucide-react";
 import nncLogo from "../../assets/nnclogo.png";
 import "./Sidebar.css";
@@ -126,7 +128,10 @@ export default function Sidebar() {
       title: "Sales",
       items: [
         { label: "All Leads",  path: "/enquiries",   moduleKey: "enquiries",   icon: <MessageSquare size={15} />, badge: newEnquiryCount || null },
-        { label: "Projects", path: "/leads",     moduleKey: "all-leads", icon: <Users size={15} /> },        { label: "Quotations", path: "/quotations",  moduleKey: "quotations",  icon: <ReceiptText size={15} /> },
+        { label: "Projects", path: "/leads",     moduleKey: "all-leads", icon: <Users size={15} /> },
+        { label: "Monthly & Extras", path: "/monthly-billing", moduleKey: "all-leads", icon: <Repeat size={15} /> },
+        { label: "Integrations", path: "/integrations", moduleKey: "integrations", icon: <Plug size={15} /> },
+        { label: "Quotations", path: "/quotations",  moduleKey: "quotations",  icon: <ReceiptText size={15} /> },
         { label: "Calendar",   path: "/calendar",    moduleKey: "calendar",    icon: <CalendarDays size={15} /> },
       ],
     },
