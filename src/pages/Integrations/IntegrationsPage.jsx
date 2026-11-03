@@ -4,6 +4,7 @@ import { toast } from "../../utils/toast";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import IntegrationFormModal from "./IntegrationFormModal";
 import { IntegrationCard } from "./ProjectIntegrations";
+import { fetchProjects } from "../ProjectBilling/billingMeta";
 import { api, canEditIntegrations, CATEGORIES, CATEGORY_META, STATUS_META, renewalState } from "./integrationMeta";
 import "./Integrations.css";
 
@@ -15,6 +16,8 @@ export default function IntegrationsPage() {
   const [search, setSearch]     = useState("");
   const [category, setCategory] = useState("");
   const [status, setStatus]     = useState("");
+  const [project, setProject]   = useState(""); // selected project id
+  const [projects, setProjects] = useState([]);
   const [cardFilter, setCardFilter] = useState(""); // "" | "live" | "issue" | "renewal"
   const [modal, setModal]       = useState(null);
   const canEdit = canEditIntegrations();
@@ -30,19 +33,37 @@ export default function IntegrationsPage() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  useEffect(() => { fetchProjects().then(setProjects).catch(() => setProjects([])); }, []);
+
+  // Integration count per project, for the dropdown
+  const countBy = useMemo(() => {
+    const m = {};
+    for (const i of items) m[i.lead?._id] = (m[i.lead?._id] || 0) + 1;
+    return m;
+  }, [items]);
+
+  // Projects with integrations first, then the rest
+  const projectOptions = useMemo(() => {
+    const list = projects.length ? projects : [...new Map(items.map(i => [i.lead._id, i.lead])).values()];
+    return [...list].sort((a, b) => ((countBy[b._id] ? 1 : 0) - (countBy[a._id] ? 1 : 0)) || String(a.name).localeCompare(String(b.name)));
+  }, [projects, items, countBy]);
+  const selectedProject = projectOptions.find(p => p._id === project) || null;
+
+  // Integrations of the selected project (or all)
+  const scoped = useMemo(() => (project ? items.filter(i => i.lead?._id === project) : items), [items, project]);
 
   const stats = useMemo(() => ({
-    total:    items.length,
-    projects: new Set(items.map(i => i.lead?._id)).size,
-    live:     items.filter(i => i.status === "live").length,
-    issue:    items.filter(i => i.status === "issue").length,
-    renewal:  items.filter(i => ["soon", "overdue"].includes(renewalState(i.renewalDate))).length,
-  }), [items]);
+    total:    scoped.length,
+    projects: new Set(scoped.map(i => i.lead?._id)).size,
+    live:     scoped.filter(i => i.status === "live").length,
+    issue:    scoped.filter(i => i.status === "issue").length,
+    renewal:  scoped.filter(i => ["soon", "overdue"].includes(renewalState(i.renewalDate))).length,
+  }), [scoped]);
 
   // Filter, then group by project
   const groups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const list = items.filter(i => {
+    const list = scoped.filter(i => {
       if (category && i.category !== category) return false;
       if (status && i.status !== status) return false;
       if (cardFilter === "live" && i.status !== "live") return false;
@@ -59,7 +80,7 @@ export default function IntegrationsPage() {
       map.get(id).items.push(i);
     }
     return [...map.values()].sort((a, b) => a.lead.name.localeCompare(b.lead.name));
-  }, [items, search, category, status, cardFilter]);
+  }, [scoped, search, category, status, cardFilter]);
 
   const remove = async (item) => {
     if (!window.confirm(`Delete ${item.service} from ${item.lead?.name}? Its stored keys will be deleted too.`)) return;
@@ -75,7 +96,7 @@ export default function IntegrationsPage() {
   const saved = (doc, project) =>
     setItems(list => (list.some(x => x._id === doc._id)
       ? list.map(x => (x._id === doc._id ? { ...doc, lead: x.lead } : x))
-      : [{ ...doc, lead: project || { _id: doc.lead, name: "Project" } }, ...list]));
+      : [{ ...doc, lead: project || projectOptions.find(p => p._id === String(doc.lead)) || { _id: doc.lead, name: "Project" } }, ...list]));
 
   const cards = [
     { key: "",        label: "Total Integrations", value: stats.total,    sub: `${stats.projects} project${stats.projects === 1 ? "" : "s"}`, cls: "total" },
@@ -90,7 +111,7 @@ export default function IntegrationsPage() {
     <div className="intg-page">
       <div className="intg-page-head">
         <div>
-          <h1 className="intg-page-title">Third-party Integrations</h1>
+          <h1 className="intg-page-title">Credential Vault</h1>
           <div className="intg-tab-sub">
             Payment gateways, SMS, hosting, domains and other services used across projects
           </div>
@@ -100,7 +121,7 @@ export default function IntegrationsPage() {
             <RefreshCw size={14} className={loading ? "intg-spin" : ""} /> Refresh
           </button>
           {canEdit && (
-            <button type="button" className="intg-btn primary" onClick={() => setModal({})}>
+            <button type="button" className="intg-btn primary" onClick={() => setModal(selectedProject ? { lead: selectedProject } : {})}>
               <Plus size={14} /> Add Integration
             </button>
           )}
@@ -131,6 +152,14 @@ export default function IntegrationsPage() {
             placeholder="Search project, service, username…"
           />
         </div>
+        <select className="intg-proj-select" value={project} onChange={e => setProject(e.target.value)}>
+          <option value="">All projects</option>
+          {projectOptions.map(p => (
+            <option key={p._id} value={p._id}>
+              {p.name}{p.business ? ` — ${p.business}` : ""} ({countBy[p._id] || 0})
+            </option>
+          ))}
+        </select>
         <select value={category} onChange={e => setCategory(e.target.value)}>
           <option value="">All categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_META[c].icon} {c}</option>)}
@@ -145,8 +174,10 @@ export default function IntegrationsPage() {
       {!loading && error && <div className="intg-empty error">{error}</div>}
       {!loading && !error && groups.length === 0 && (
         <div className="intg-empty">
-          {items.length === 0
-            ? "No integrations added yet. Click “Add Integration” and pick a project."
+          {scoped.length === 0
+            ? (project
+              ? `No integrations for ${selectedProject?.name || "this project"} yet. Click “Add Integration” to add one.`
+              : "No integrations added yet. Click “Add Integration” and pick a project.")
             : "No integrations match these filters."}
         </div>
       )}

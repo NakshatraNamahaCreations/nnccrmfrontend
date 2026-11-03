@@ -26,6 +26,8 @@ import OwnerDesk        from "./pages/OwnerDesk/OwnerDesk";
 import CredentialVault  from "./pages/CredentialVault/CredentialVault";
 import IntegrationsPage  from "./pages/Integrations/IntegrationsPage";
 import MonthlyBillingPage from "./pages/ProjectBilling/MonthlyBillingPage";
+import SalesDesk from "./pages/SalesDesk/SalesDesk";
+import SeoTeam from "./pages/SeoTeam/SeoTeam";
 
 function isAuthed() {
   try {
@@ -98,6 +100,22 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Documents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/seo-team"
+        element={
+          <ProtectedRoute>
+            <SeoTeam />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/sales-desk"
+        element={
+          <ProtectedRoute>
+            <SalesDesk />
           </ProtectedRoute>
         }
       />

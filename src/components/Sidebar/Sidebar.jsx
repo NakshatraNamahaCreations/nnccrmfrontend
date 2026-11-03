@@ -25,6 +25,8 @@ import {
   ShieldCheck,
   Plug,
   Repeat,
+  Headset,
+  SearchCheck,
 } from "lucide-react";
 import nncLogo from "../../assets/nnclogo.png";
 import "./Sidebar.css";
@@ -119,7 +121,9 @@ export default function Sidebar() {
       title: "Overview",
       items: [
         { label: "Owner's Desk",      path: "/owner-desk",  moduleKey: "owner-desk",        icon: <Briefcase size={15} /> },
-        { label: "Credentials Vault", path: "/credentials", moduleKey: "credentials-vault", icon: <ShieldCheck size={15} /> },
+        { label: "All Leads",         path: "/sales-desk",  moduleKey: "all-leads",         icon: <Headset size={15} />, badge: newEnquiryCount || null },
+        { label: "SEO & Ads Team",    path: "/seo-team",    moduleKey: "seo-team",          icon: <SearchCheck size={15} /> },
+        { label: "NNC Credentials", path: "/credentials", moduleKey: "credentials-vault", icon: <ShieldCheck size={15} /> },
         { label: "Today's Plan",  path: "/todays-plan", moduleKey: "todays-plan", icon: <ClipboardList size={15} /> },
         { label: "Dashboard",     path: "/dashboard",   moduleKey: "dashboard",   icon: <LayoutDashboard size={15} /> },
       ],
@@ -127,10 +131,10 @@ export default function Sidebar() {
     {
       title: "Sales",
       items: [
-        { label: "All Leads",  path: "/enquiries",   moduleKey: "enquiries",   icon: <MessageSquare size={15} />, badge: newEnquiryCount || null },
+        // "All Leads" (/enquiries) is hidden: new leads are worked from All Leads (/sales-desk). The page still opens at /enquiries.
         { label: "Projects", path: "/leads",     moduleKey: "all-leads", icon: <Users size={15} /> },
         { label: "Monthly & Extras", path: "/monthly-billing", moduleKey: "all-leads", icon: <Repeat size={15} /> },
-        { label: "Integrations", path: "/integrations", moduleKey: "integrations", icon: <Plug size={15} /> },
+        { label: "Credential Vault", path: "/integrations", moduleKey: "integrations", icon: <Plug size={15} /> },
         { label: "Quotations", path: "/quotations",  moduleKey: "quotations",  icon: <ReceiptText size={15} /> },
         { label: "Calendar",   path: "/calendar",    moduleKey: "calendar",    icon: <CalendarDays size={15} /> },
       ],

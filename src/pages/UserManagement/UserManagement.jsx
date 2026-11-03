@@ -6,6 +6,7 @@ import {
   BarChart3, Trophy, Building2, CreditCard, Settings,
   ClipboardList, Users, MessageSquare, Wallet, TrendingUp,
   BookOpen, UserCheck, PiggyBank, Plug,
+  SearchCheck,
 } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
@@ -20,7 +21,8 @@ const ALL_MODULES = [
   { key: "all-leads",       label: "All Leads",          section: "Sales" },
   { key: "enquiries",       label: "Enquiries",          section: "Sales" },
   { key: "calendar",        label: "Calendar",           section: "Sales" },
-  { key: "integrations",    label: "Integrations",       section: "Sales" },
+  { key: "integrations",    label: "Credential Vault",   section: "Sales" },
+  { key: "seo-team",        label: "SEO & Ads Team",     section: "Sales" },
   { key: "documents",       label: "Documents",          section: "Documents" },
   { key: "analytics",       label: "Analytics",          section: "Analytics" },
   { key: "leaderboard",     label: "Leaderboard",        section: "Analytics" },
@@ -42,6 +44,7 @@ const MODULE_ICONS = {
   "enquiries":       MessageSquare,
   "calendar":        CalendarDays,
   "integrations":    Plug,
+  "seo-team":        SearchCheck,
   "documents":       FileText,
   "analytics":       BarChart3,
   "leaderboard":     Trophy,

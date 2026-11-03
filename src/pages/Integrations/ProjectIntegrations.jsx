@@ -148,7 +148,7 @@ export default function ProjectIntegrations({ lead }) {
     <div className="intg-tab">
       <div className="intg-tab-head">
         <div>
-          <div className="intg-tab-title">Third-party Integrations</div>
+          <div className="intg-tab-title">Credential Vault</div>
           <div className="intg-tab-sub">Payment gateways, SMS, hosting, domains and other services used in this project</div>
         </div>
         {canEdit && (

@@ -323,7 +323,7 @@ export default function CredentialVault() {
         <div className="cv-header-left">
           <div className="cv-header-icon"><KeyRound size={22} /></div>
           <div>
-            <h1>Credentials Vault</h1>
+            <h1>NNC Credentials</h1>
             <p>{creds.length} stored · AES-256 encrypted</p>
           </div>
         </div>

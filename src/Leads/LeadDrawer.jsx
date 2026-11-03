@@ -692,7 +692,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
           </div>
 
           <div className="ldTabs">
-            {["Profile", "BANT", "Follow-up", "Calls/WA", "History", "Emails", "Docs", "Notes", "Extras & Monthly", "Integrations"].map((t) => (
+            {["Profile", "BANT", "Follow-up", "Calls/WA", "History", "Emails", "Docs", "Notes", "Extras & Monthly", "Credential Vault"].map((t) => (
               <button
                 key={t}
                 type="button"
@@ -777,7 +777,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                   />
                 )}
                 {activeTab === "Extras & Monthly" && <ProjectBilling lead={lead} />}
-                {activeTab === "Integrations" && <ProjectIntegrations lead={lead} />}
+                {activeTab === "Credential Vault" && <ProjectIntegrations lead={lead} />}
               </>
             ) : null}
           </div>

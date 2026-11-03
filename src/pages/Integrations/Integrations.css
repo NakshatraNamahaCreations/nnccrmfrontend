@@ -184,3 +184,4 @@
   .intg-page { padding: 16px; }
   .intg-group-grid { grid-template-columns: 1fr; }
 }
+.intg-filters select.intg-proj-select { max-width: 280px; }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import LeadDrawer from "../../Leads/LeadDrawer";
 import ClientHistoryDrawer from "./ClientHistoryDrawer";
+import PaymentCalendar from "./PaymentCalendar";
 import { Download, Eye, Search, X, RefreshCcw, PlusCircle, History } from "lucide-react";
 import { toast } from "../../utils/toast";
 import { calcGst } from "../../Leads/gst";
@@ -68,6 +69,8 @@ export default function PaymentTracker() {
   const [payForm,  setPayForm]    = useState({ amount: "", date: new Date().toISOString().slice(0,10), mode: "NEFT", account: "", transactionId: "", note: "" });
   const [paySaving, setPaySaving] = useState(false);
   const [historyClientId, setHistoryClientId] = useState(null);
+  const [ptView, setPtView] = useState("table"); // "table" | "calendar"
+  const [calReload, setCalReload] = useState(0);
   const amtRef = useRef(null);
 
   const fetchLeads = async () => {
@@ -296,6 +299,7 @@ export default function PaymentTracker() {
       toast.success(`₹${amt.toLocaleString("en-IN")} recorded for ${payModal.name}`);
       setPayModal(null);
       fetchLeads();
+      setCalReload(k => k + 1);
     } catch (e) {
       toast.error(e?.message || "Failed to save payment");
     } finally {
@@ -309,6 +313,25 @@ export default function PaymentTracker() {
       <Sidebar />
       <div className="ptMain">
         <div className="ptBody">
+
+          {/* ── View switch ── */}
+          <div className="ptViewBar">
+            <span className="ptViewLabel">View</span>
+            <select value={ptView} onChange={e => setPtView(e.target.value)} aria-label="View">
+              <option value="table">Payment Table</option>
+              <option value="calendar">Payment Calendar</option>
+            </select>
+          </div>
+
+          {ptView === "calendar" ? (
+            <PaymentCalendar
+              reloadKey={calReload}
+              onRecordProject={(l) => {
+                const g = calcGst(l.value, l.gstApplicable, l.gstRate || 18);
+                openPayModal({ stopPropagation() {} }, { id: l._id, name: l.name, totalWithGst: g.total, advanceReceived: Number(l.advanceReceived || 0) });
+              }}
+            />
+          ) : (<>
 
           {/* ── Summary cards ── */}
           <div className="ptSummaryRow">
@@ -569,6 +592,7 @@ export default function PaymentTracker() {
               </div>
             </div>
           )}
+          </>)}
 
         </div>
       </div>
