@@ -3,6 +3,9 @@ import { Send, Megaphone, X } from "lucide-react";
 import { toast } from "../../utils/toast";
 import { billingApi } from "../ProjectBilling/billingMeta";
 import { initials } from "../SeoTeam/seoUtil";
+import { useRise, useNewMessage } from "../../utils/ding";
+
+const mine = (m) => m.from === "admin";
 
 // Chat with each employee in the Employee Portal, plus announcements to everyone
 const papi = (path, opts) => billingApi(`/portal/admin${path}`, opts);
@@ -14,6 +17,9 @@ export default function PortalChat({ onUnread }) {
   const [threads, setThreads] = useState(null);
   const [sel, setSel] = useState("");
   const [msgs, setMsgs] = useState([]);
+  const [thUnread, setThUnread] = useState(0);
+  useRise(thUnread, "msg");               // sound when an employee writes in
+  useNewMessage(msgs, sel, mine);
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [ann, setAnn] = useState(false);
@@ -22,7 +28,7 @@ export default function PortalChat({ onUnread }) {
 
   useEffect(() => {
     let live = true;
-    const load = () => papi("/threads").then(j => { if (live) { setThreads(j.data); onUnread?.(j.data.reduce((a, t) => a + t.unread, 0)); } }, () => live && setThreads(t => t || []));
+    const load = () => papi("/threads").then(j => { if (live) { setThreads(j.data); const u = j.data.reduce((a, t) => a + t.unread, 0); setThUnread(u); onUnread?.(u); } }, () => live && setThreads(t => t || []));
     load();
     const t = setInterval(load, 5000);
     return () => { live = false; clearInterval(t); };
