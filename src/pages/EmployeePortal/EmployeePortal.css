@@ -46,3 +46,6 @@
 .ep .ep-conv-f textarea { flex: 1; resize: none; min-height: 40px; max-height: 140px; border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-family: inherit; }
 .ep .ep-form textarea { border: 1px solid var(--line); border-radius: 10px; padding: 9px 12px; font-family: inherit; }
 @media (max-width: 900px) { .ep .ep-chat { grid-template-columns: 1fr; height: auto; } .ep .ep-threads { max-height: 240px; border-right: 0; border-bottom: 1px solid var(--line); } .ep .ep-conv { min-height: 420px; } }
+.ep .ep-pwin { position: relative; display: block; }
+.ep .ep-pwin input { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 42px 0 10px; }
+.ep .ep-pwin button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--muted); padding: 6px; display: grid; }

@@ -945,9 +945,10 @@ function DevelopersTab({ toast }) {
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const blank = { name:"", role:"Full Stack", email:"", phone:"", branch:"", skills:"", isActive:true, projectIds:[] };
-  const openCreate = () => { setPSearch(""); setModal({ mode:"create", data:blank }); };
-  const openEdit   = d  => { setPSearch(""); setModal({ mode:"edit", data:{ ...d, projectIds: d.projects.map(p => p._id) } }); };
+  const [showPw, setShowPw] = useState(false);
+  const blank = { name:"", role:"Full Stack", email:"", phone:"", branch:"", skills:"", isActive:true, projectIds:[], portalPassword:"" };
+  const openCreate = () => { setPSearch(""); setShowPw(false); setModal({ mode:"create", data:blank }); };
+  const openEdit   = d  => { setPSearch(""); setShowPw(false); setModal({ mode:"edit", data:{ ...d, portalPassword:"", projectIds: d.projects.map(p => p._id) } }); };
   const setData    = patch => setModal(m => ({ ...m, data:{ ...m.data, ...patch } }));
   const toggleProject = id => setModal(m => {
     const cur = m.data.projectIds;
@@ -956,11 +957,13 @@ function DevelopersTab({ toast }) {
 
   const save = async (data) => {
     if (!data.name.trim()) return toast("error", "Name is required");
+    if (data.portalPassword && !String(data.email || "").trim()) return toast("error", "Add the email: it is their Employee Portal login");
+    if (data.portalPassword && (data.portalPassword.length < 8 || !/\d/.test(data.portalPassword))) return toast("error", "Portal password needs at least 8 characters and a number");
     const isCreate = modal.mode === "create";
     try {
       const j = await api(isCreate ? "POST" : "PUT", isCreate ? "/api/developers" : `/api/developers/${data._id}`, data);
       if (!j.success) throw new Error(j.message);
-      toast("success", isCreate ? "Developer added" : "Developer updated");
+      toast("success", data.portalPassword ? `${isCreate ? "Developer added" : "Developer updated"}. They can sign in to the Employee Portal with ${data.email}` : isCreate ? "Developer added" : "Developer updated");
       setModal(null); load();
     } catch(e) { toast("error", e.message || "Failed"); }
   };
@@ -969,7 +972,7 @@ function DevelopersTab({ toast }) {
     try {
       const j = await api("DELETE", `/api/developers/${del._id}`);
       if (!j.success) throw new Error(j.message);
-      toast("success", "Developer removed");
+      toast("success", j.portalRemoved ? "Developer removed, with their Employee Portal login" : "Developer removed");
       setDel(null); load();
     } catch(e) { toast("error", e.message || "Failed"); }
   };
@@ -1007,6 +1010,9 @@ function DevelopersTab({ toast }) {
                     <td>
                       <div>{d.phone || "—"}</div>
                       {d.email && <div className="st-mono st-dev-skills">{d.email}</div>}
+                      <div style={{ marginTop:4 }}>{d.portal
+                        ? <span className={d.portal.status === "active" ? "st-badge-green" : "st-badge-red"}>Portal login {d.portal.status === "active" ? "active" : d.portal.status}</span>
+                        : <span className="st-pill-none">No portal login</span>}</div>
                     </td>
                     <td>
                       {d.projects.length === 0 ? <span className="st-pill-none">Not assigned</span> : (
@@ -1075,6 +1081,22 @@ function DevelopersTab({ toast }) {
                 </Field>
                 <Field label="Skills (optional)"><Input placeholder="React, Node, Flutter…" value={modal.data.skills || ""} onChange={e => setData({ skills:e.target.value })}/></Field>
               </div>
+
+              <Field label={modal.data.portal ? "Employee Portal password (leave empty to keep the current one)" : "Employee Portal password (optional)"}>
+                <div style={{ position:"relative" }}>
+                  <Input type={showPw ? "text" : "password"} autoComplete="new-password" placeholder={modal.data.portal ? "Type a new password to change it" : "Set a password to create their portal login"}
+                    value={modal.data.portalPassword || ""} onChange={e => setData({ portalPassword:e.target.value })} style={{ paddingRight:40 }}/>
+                  <button type="button" onClick={() => setShowPw(v => !v)} aria-label={showPw ? "Hide password" : "Show password"}
+                    style={{ position:"absolute", right:8, top:"50%", transform:"translateY(-50%)", border:0, background:"none", cursor:"pointer", color:"#64748B", display:"grid" }}>
+                    {showPw ? <EyeOff size={16}/> : <Eye size={16}/>}
+                  </button>
+                </div>
+                <div className="st-dev-skills" style={{ marginTop:6 }}>
+                  {modal.data.portal
+                    ? <>Signs in to the Employee Portal with <b>{modal.data.portal.email}</b> · login {modal.data.portal.status}. The current password is stored encrypted and cannot be shown.</>
+                    : <>They sign in to the Employee Portal with the email above and this password. At least 8 characters with a number.</>}
+                </div>
+              </Field>
 
               <Field label={`Assigned Projects (${modal.data.projectIds.length})`}>
                 <Input placeholder="Search projects…" value={pSearch} onChange={e => setPSearch(e.target.value)}/>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { UserCheck, RefreshCw, X } from "lucide-react";
+import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import { billingApi } from "../ProjectBilling/billingMeta";
@@ -123,6 +123,20 @@ function People({ A }) {
   const reset = async (a) => {
     try { const j = await papi(`/accounts/${a.id}/reset`, { method: "POST" }); setTmp({ a, pw: j.tempPassword }); A.reload(); } catch (ex) { toast.error(ex.message); }
   };
+  const remove = async (a) => {
+    try { await papi(`/accounts/${a.id}`, { method: "DELETE" }); toast.success(`${a.name} deleted`); A.reload(); } catch (ex) { toast.error(ex.message); }
+  };
+  const [pwFor, setPwFor] = useState(null);
+  const [pw, setPw] = useState({ v: "", show: false, busy: false });
+  const savePw = async (ev) => {
+    ev.preventDefault();
+    setPw(p => ({ ...p, busy: true }));
+    try {
+      await papi(`/accounts/${pwFor.id}/password`, { method: "PUT", body: { password: pw.v } });
+      toast.success(`Password set for ${pwFor.name}`);
+      setTmp({ a: pwFor, pw: pw.v, set: true }); setPwFor(null); setPw({ v: "", show: false, busy: false });
+    } catch (ex) { toast.error(ex.message); setPw(p => ({ ...p, busy: false })); }
+  };
   return (
     <>
       <div className="kpis">
@@ -142,15 +156,18 @@ function People({ A }) {
               <td><div className="ep-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">joined {fd(dayOf(a.created))}</span></span></div></td>
               <td><Role r={a.role} /></td>
               <td>{a.email}<span className="sub">{a.phone}</span></td>
-              <td className="ep-works">{a.worksOn || (a.status === "active" ? <span className="sub">Not assigned yet · <Link to={["seo", "ads", "gfx"].includes(a.role) ? "/seo-team" : "/leads"}>assign</Link></span> : "-")}</td>
+              <td className="ep-works">{a.orphan ? <span className="pill p-red">Removed from the CRM team</span>
+                : a.worksOn || (a.status === "active" ? <span className="sub">Not assigned yet · <Link to={["seo", "ads", "gfx"].includes(a.role) ? "/seo-team" : "/leads"}>assign</Link></span> : "-")}</td>
               <td>{when(a.lastLogin)}<span className="sub">{a.logins} sign ins</span></td>
               <td>{a.status === "active" ? <span className="pill p-ok">Active</span> : a.status === "pending" ? <span className="pill p-amb">Waiting</span> : <span className="pill p-red">Disabled</span>}
                 {a.mustChange && <span className="sub">temporary password</span>}</td>
               <td className="ep-act">
                 {a.status === "pending" && <button type="button" className="btn sm pri" onClick={() => upd(a, { status: "active" }, `${a.name} approved`)}>Approve</button>}
                 {a.status === "disabled" && <button type="button" className="btn sm" onClick={() => upd(a, { status: "active" }, "Account enabled")}>Enable</button>}
-                {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => setAsk({ kind: "reset", a })}>Reset password</button>}
+                {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => { setPw({ v: "", show: false, busy: false }); setPwFor(a); }}>Set password</button>}
+                {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => setAsk({ kind: "reset", a })}>Reset</button>}
                 {a.status !== "disabled" && <button type="button" className="btn sm late" onClick={() => setAsk({ kind: "disable", a })}>{a.status === "pending" ? "Reject" : "Disable"}</button>}
+                <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${a.name}`} onClick={() => setAsk({ kind: "delete", a })}><Trash2 size={13} /></button>
               </td>
             </tr>
           )) : <tr><td colSpan={7}><div className="empty">{L.length ? "Nobody in this list." : "No employees yet. When someone creates an account in the Employee Portal, they appear here to approve."}</div></td></tr>}
@@ -160,24 +177,39 @@ function People({ A }) {
         They see only the clients (SEO & Ads Team → Clients and settings) or projects (the project's developers) you assign them.</p>
 
       {ask && (
-        <Modal title={ask.kind === "reset" ? `Reset ${ask.a.name}'s password?` : `${ask.a.status === "pending" ? "Reject" : "Disable"} ${ask.a.name}?`} onClose={() => setAsk(null)}>
-          <p>{ask.kind === "reset" ? "You get a temporary password to share. They choose a new one when they sign in." : "They can no longer sign in to the Employee Portal. Their logged work stays."}</p>
+        <Modal title={ask.kind === "reset" ? `Reset ${ask.a.name}'s password?` : ask.kind === "delete" ? `Delete ${ask.a.name}?` : `${ask.a.status === "pending" ? "Reject" : "Disable"} ${ask.a.name}?`} onClose={() => setAsk(null)}>
+          <p>{ask.kind === "reset" ? "You get a temporary password to share. They choose a new one when they sign in."
+            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "ads", "gfx"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "Settings → Developers and every project"}. Work they already logged stays in the history. This cannot be undone.`
+              : "They can no longer sign in to the Employee Portal. Their logged work stays."}</p>
           <div className="ep-row">
             <button type="button" className="btn" onClick={() => setAsk(null)}>Cancel</button>
-            <button type="button" className={`btn ${ask.kind === "reset" ? "pri" : "late"}`} onClick={() => { const { kind, a } = ask; setAsk(null); if (kind === "reset") reset(a); else upd(a, { status: "disabled" }, "Account disabled"); }}>
-              {ask.kind === "reset" ? "Reset password" : ask.a.status === "pending" ? "Reject" : "Disable"}</button>
+            <button type="button" className={`btn ${ask.kind === "reset" ? "pri" : "late"}`} onClick={() => { const { kind, a } = ask; setAsk(null); if (kind === "reset") reset(a); else if (kind === "delete") remove(a); else upd(a, { status: "disabled" }, "Account disabled"); }}>
+              {ask.kind === "reset" ? "Reset password" : ask.kind === "delete" ? "Delete" : ask.a.status === "pending" ? "Reject" : "Disable"}</button>
           </div>
         </Modal>
       )}
       {tmp && (
-        <Modal title="Temporary password" onClose={() => setTmp(null)}>
-          <p>Share this with <b>{tmp.a.name}</b>. They will be asked to choose a new password when they sign in.</p>
+        <Modal title={tmp.set ? "Password set" : "Temporary password"} onClose={() => setTmp(null)}>
+          <p>{tmp.set ? <>Share this with <b>{tmp.a.name}</b>. They sign in with <b>{tmp.a.email}</b> and this password. It is not shown again.</>
+            : <>Share this with <b>{tmp.a.name}</b>. They will be asked to choose a new password when they sign in.</>}</p>
           <div className="ep-pw">{tmp.pw}</div>
           <div className="ep-row">
             <button type="button" className="btn pri" onClick={() => { copy(tmp.pw); toast.success("Copied"); }}>Copy</button>
             {tmp.a.phone && <a className="btn wa" target="_blank" rel="noopener noreferrer"
-              href={`https://wa.me/${waPhone(tmp.a.phone)}?text=${encodeURIComponent(`Hi ${tmp.a.name}, your NNC Employee Portal temporary password is ${tmp.pw}. Sign in with ${tmp.a.email} and choose a new password.`)}`}>Send on WhatsApp</a>}
+              href={`https://wa.me/${waPhone(tmp.a.phone)}?text=${encodeURIComponent(tmp.set ? `Hi ${tmp.a.name}, your NNC Employee Portal login: ${tmp.a.email} / ${tmp.pw}` : `Hi ${tmp.a.name}, your NNC Employee Portal temporary password is ${tmp.pw}. Sign in with ${tmp.a.email} and choose a new password.`)}`}>Send on WhatsApp</a>}
           </div>
+        </Modal>
+      )}
+      {pwFor && (
+        <Modal title={`Set ${pwFor.name}'s password`} onClose={() => setPwFor(null)}>
+          <form onSubmit={savePw} className="ep-form">
+            <p className="sub">They sign in to the Employee Portal with <b>{pwFor.email}</b> and this password. Passwords are stored encrypted, so the current one cannot be shown: set a new one here.</p>
+            <label className="f"><span className="flabel">New password</span>
+              <span className="ep-pwin"><input type={pw.show ? "text" : "password"} value={pw.v} onChange={e => setPw(p => ({ ...p, v: e.target.value }))} minLength={8} required autoComplete="new-password" />
+                <button type="button" onClick={() => setPw(p => ({ ...p, show: !p.show }))} aria-label={pw.show ? "Hide password" : "Show password"}>{pw.show ? <EyeOff size={16} /> : <Eye size={16} />}</button></span></label>
+            <span className="sub">At least 8 characters, with a number.</span>
+            <div className="ep-row"><button type="button" className="btn" onClick={() => setPwFor(null)}>Cancel</button><button className="btn pri" disabled={pw.busy}>{pw.busy ? "Saving…" : "Set password"}</button></div>
+          </form>
         </Modal>
       )}
     </>
