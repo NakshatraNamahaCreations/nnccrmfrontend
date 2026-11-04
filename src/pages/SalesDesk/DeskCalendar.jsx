@@ -113,6 +113,8 @@ export default function CalendarView({ events, clients, onOpen, onNew }) {
 }
 
 /* ───────── Schedule / edit a meeting (CRM calendar entry) ───────── */
+const kindOf = (c) => (c.src === "enq" ? "Enquiry" : c.completed ? "Completed project" : c.group === "project" ? "Project" : "Lead");
+
 export function MeetingModal({ ev, presetClientId, clients, onClose, onSaved, onShare }) {
   const isNew = !ev;
   const [clientId, setClientId] = useState(ev ? String(ev.leadId || ev.enquiryId || "") : (presetClientId || ""));
@@ -134,9 +136,11 @@ export function MeetingModal({ ev, presetClientId, clients, onClose, onSaved, on
   const client = clients.find(c => c.id === clientId) || null;
   const options = useMemo(() => {
     const s = find.trim().toLowerCase();
-    const L = clients.filter(c => c.src !== "event" && (!s || [c.name, c.company, c.phone].some(v => String(v || "").toLowerCase().includes(s))));
+    const L = clients.filter(c => c.src !== "event" && (!s || [c.name, c.company, c.phone, c.project].some(v => String(v || "").toLowerCase().includes(s))));
     return L.slice(0, 200);
   }, [clients, find]);
+  // Picking a client also fills in their email if it is still empty
+  const pickClient = (c) => { setClientId(c.id); if (c.email) setF(s => (s.email ? s : { ...s, email: c.email })); };
 
   const body = () => ({
     date: f.date, time: f.time, duration: Number(f.duration) || 30, mode: f.mode, title: f.title.trim(),
@@ -210,11 +214,25 @@ export function MeetingModal({ ev, presetClientId, clients, onClose, onSaved, on
         </div>
         <div className="m-b">
           {isNew ? (
-            <div className="sd-f"><span>Client</span>
-              <input value={find} onChange={e => setFind(e.target.value)} placeholder="Search name, company or phone" />
-              <select value={clientId} onChange={e => setClientId(e.target.value)} size={5} className="sd-pick">
-                {options.map(c => <option key={c.id} value={c.id}>{c.name}{c.company ? ` · ${c.company}` : ""} · {c.src === "enq" ? "Enquiry" : "Lead"}</option>)}
-              </select>
+            <div className="sd-f"><span>Client or project</span>
+              {client ? (
+                <div className="sd-picked">
+                  <div><b>{client.name}</b><span>{[client.company, kindOf(client), client.phone].filter(Boolean).join(" · ")}</span></div>
+                  <button type="button" className="sd-btn sm" onClick={() => setClientId("")}>Change</button>
+                </div>
+              ) : (
+                <>
+                  <input value={find} onChange={e => setFind(e.target.value)} placeholder="Search name, company, project or phone" autoFocus />
+                  <div className="sd-picklist" role="listbox" aria-label="Clients">
+                    {options.map(c => (
+                      <button type="button" role="option" aria-selected="false" key={`${c.src}-${c.id}`} onClick={() => pickClient(c)}>
+                        <b>{c.name}</b>{c.company ? ` · ${c.company}` : ""}<span className={`sd-pk ${c.group === "project" ? "pj" : ""}`}>{kindOf(c)}</span>
+                      </button>
+                    ))}
+                    {!options.length && <div className="sd-note">No client matches “{find}”.</div>}
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <div className="sd-note">{TYPE_LABEL[ev.type] || ev.type}{client ? ` · ${client.project} · ${client.owner}` : ""}{ev.email ? ` · ${ev.email}` : ""}{ev.status && ev.status !== "scheduled" ? ` · ${ev.status}` : ""}</div>

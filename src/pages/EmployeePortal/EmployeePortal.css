@@ -60,3 +60,13 @@
 .ep .ep-pick input[type="checkbox"] { width: 16px; height: 16px; flex: none; }
 .ep .ep-pick.ro { max-height: 420px; }
 .ep .link { background: none; border: 0; padding: 0; color: #2563EB; text-decoration: underline; cursor: pointer; font: inherit; }
+
+/* Work log: one row per person; click opens their work */
+.ep .ep-people > button { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; border-bottom: 1px solid #EEF1F6; background: #fff; text-align: left; font: inherit; color: inherit; cursor: pointer; }
+.ep .ep-people > button:hover, .ep .ep-people > button:focus-visible { background: #F5F8FF; outline: none; }
+.ep .ep-people .ep-go { color: #94A3B8; flex: none; }
+.ep-pday { border: 1px solid #E8ECF1; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
+.ep-pday-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #F8FAFC; border-bottom: 1px solid #E8ECF1; }
+.ep-pday-h .pill { margin-left: auto; }
+.ep-pnote { padding: 8px 14px 0; white-space: pre-wrap; }
+.ep-docs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }

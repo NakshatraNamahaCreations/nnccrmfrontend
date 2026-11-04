@@ -3,10 +3,12 @@
   position: fixed; right: 22px; bottom: 20px; z-index: 1050; font-family: inherit; }
 .nnc-tc *, .nnc-tc *::before, .nnc-tc *::after { box-sizing: border-box; }
 .nnc-tc button, .nnc-tc textarea { font-family: inherit; }
-.nnc-tc-fab { position: relative; display: inline-flex; align-items: center; gap: 9px; height: 50px; padding: 0 18px 0 15px; border: 0; border-radius: 25px; background: linear-gradient(135deg, #2563EB, #4F46E5); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; box-shadow: 0 10px 28px rgba(37, 99, 235, .4); }
-.nnc-tc.open .nnc-tc-fab { width: 50px; padding: 0; justify-content: center; }
+/* A small round button so it does not hide the page behind it; faded until hovered */
+.nnc-tc-fab { position: relative; display: grid; place-items: center; width: 46px; height: 46px; padding: 0; border: 0; border-radius: 50%; background: linear-gradient(135deg, #2563EB, #4F46E5); color: #fff; cursor: pointer; box-shadow: 0 6px 18px rgba(37, 99, 235, .35); opacity: .55; transition: opacity .15s, transform .15s; }
+.nnc-tc-fab:hover, .nnc-tc-fab:focus-visible, .nnc-tc.open .nnc-tc-fab, .nnc-tc-fab.has-new { opacity: 1; }
+.nnc-tc-fab:hover { transform: scale(1.06); }
 .nnc-tc-fab em { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #DC2626; color: #fff; font-style: normal; font-size: 11.5px; font-weight: 700; display: grid; place-items: center; border: 2px solid #fff; }
-.nnc-tc-panel { position: absolute; right: 0; bottom: 62px; width: 370px; height: min(540px, calc(100vh - 110px)); background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 64px rgba(15, 23, 42, .25); display: flex; flex-direction: column; overflow: hidden; }
+.nnc-tc-panel { position: absolute; right: 0; bottom: 58px; width: 370px; height: min(540px, calc(100vh - 110px)); background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 64px rgba(15, 23, 42, .25); display: flex; flex-direction: column; overflow: hidden; }
 .nnc-tc-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--navy); color: #fff; }
 .nnc-tc-ht { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .nnc-tc-ht b { font-size: 14.5px; }
@@ -43,8 +45,6 @@
 .nnc-tc-send:disabled { opacity: .45; cursor: default; }
 @media (max-width: 900px) {
   .nnc-tc { right: 14px; bottom: 84px; }
-  .nnc-tc-lbl { display: none; }
-  .nnc-tc-fab { width: 52px; padding: 0; justify-content: center; }
   .nnc-tc-panel { position: fixed; left: 8px; right: 8px; bottom: 146px; width: auto; height: calc(100vh - 170px); }
 }
 @media print { .nnc-tc { display: none; } }

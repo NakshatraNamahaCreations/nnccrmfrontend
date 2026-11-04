@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff, UserPlus, Pencil, FolderKanban } from "lucide-react";
+import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff, UserPlus, Pencil, FolderKanban, ChevronRight } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
-import { billingApi } from "../ProjectBilling/billingMeta";
+import { billingApi, API } from "../ProjectBilling/billingMeta";
 import { T, fd, fdw, initials, waPhone, copy } from "../SeoTeam/seoUtil";
 import "../SeoTeam/SeoTeam.css";
 import "./EmployeePortal.css";
@@ -342,14 +342,23 @@ function WorksModal({ a, onClose, onDone }) {
 }
 
 /* ───────── Today and the work log ───────── */
+// "In 9:40 am · Out 6:05 pm · 8h 25m", or "· still in" while checked in
+const tm = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+function attTxt(L) {
+  const open = L.find(x => !x.out), last = [...L].reverse().find(x => x.out);
+  const m = L.reduce((a, x) => a + ((x.out ? new Date(x.out) : new Date()) - new Date(x.in)) / 60000, 0);
+  return `In ${tm(L[0].in)}${open ? " · still in" : last ? ` · Out ${tm(last.out)}` : ""} · ${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, "0")}m${L.length > 1 ? ` (${L.length} sessions)` : ""}`;
+}
+
 function Work({ accounts, today }) {
   const [rg, setRg] = useState(today ? "today" : "week");
   const [team, setTeam] = useState("all");
   const [who, setWho] = useState("");
   const [assign, setAssign] = useState(null);
+  const [person, setPerson] = useState(null);   // Work log: the employee whose work is open
   const from = T(RANGES.find(r => r[0] === (today ? "today" : rg))[2]);
   const W = useGet(`/work?from=${from}&to=${T(0)}`);
-  const d = W.data || { accounts: [], work: [], days: [], blockers: [] };
+  const d = W.data || { accounts: [], work: [], days: [], blockers: [], attendance: [] };
   const roles = TEAMS[team][1];
   const accs = d.accounts.filter(a => !roles || roles.includes(a.role));
   const ids = new Set(accs.map(a => a.id));
@@ -361,7 +370,8 @@ function Work({ accounts, today }) {
   const per = active.map(a => {
     const L = work.filter(w => String(w.account) === a.id);
     const day = days.find(x => String(x.account) === a.id && x.date === T(0));
-    return { a, hrs: L.reduce((s, w) => s + (w.hrs || 0), 0), n: L.length, sub: days.filter(x => String(x.account) === a.id).length, day };
+    const att = (d.attendance || []).find(x => String(x.account) === a.id && x.date === T(0));
+    return { a, hrs: L.reduce((s, w) => s + (w.hrs || 0), 0), extra: L.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0), n: L.length, sub: days.filter(x => String(x.account) === a.id).length, day, att };
   }).sort((x, y) => y.hrs - x.hrs);
   const resolve = async (id) => { try { await papi(`/blockers/${id}/resolve`, { method: "PUT" }); toast.success("Marked as sorted"); W.reload(); } catch (ex) { toast.error(ex.message); } };
   const tw = work.filter(w => w.date === T(0));
@@ -380,6 +390,7 @@ function Work({ accounts, today }) {
         <div className="kpi"><span className="l">Items logged today</span><span className="v">{tw.length}</span></div>
         <div className="kpi"><span className="l">Hours logged today</span><span className="v">{h1(tw.reduce((s, w) => s + (w.hrs || 0), 0))}</span></div>
         <div className="kpi"><span className="l">Days submitted today</span><span className="v">{days.filter(x => x.date === T(0)).length} / {active.length}</span></div>
+        <div className="kpi"><span className="l">Checked in today</span><span className="v">{(d.attendance || []).filter(x => x.date === T(0) && ids.has(String(x.account)) && x.sessions?.length).length} / {active.length}</span></div>
         <div className="kpi"><span className="l">Open blockers</span><span className={`v ${bl.length ? "red" : ""}`}>{bl.length}</span></div>
       </div>
       {bl.length > 0 && (
@@ -389,13 +400,14 @@ function Work({ accounts, today }) {
               <button type="button" className="btn sm" onClick={() => resolve(b._id)}>Sorted</button></div>
           ))}</div></div>
       )}
+      {today ? (
       <div className="ep-grid">
         <div className="card"><h3>{today ? "Logged today" : "Work logged"} <small>{work.length} items · {h1(work.reduce((s, w) => s + (w.hrs || 0), 0))} h</small></h3>
           {W.loading ? <div className="empty">Loading…</div> : work.length ? (
             <div className="ll flat">{work.slice(0, 300).map(e => (
               <div key={e._id}>
                 <span className="d">{today ? <Av name={acc(e.account)?.name} role={acc(e.account)?.role} /> : fd(e.date)}</span>
-                <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span> <b>{e.title}</b>
+                <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
                   <span className="sub">{[acc(e.account)?.name, e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
                   {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}</span>
                 <span className="num">{h1(e.hrs)} h</span>
@@ -408,7 +420,8 @@ function Work({ accounts, today }) {
             <div className="ll flat">{per.map(p => (
               <div key={p.a.id}>
                 <Av name={p.a.name} role={p.a.role} />
-                <span className="x"><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]} · {p.n} items{today ? "" : ` · ${p.sub} days submitted`}</span>
+                <span className="x"><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]} · {p.n} items{p.extra ? ` · ${h1(p.extra)} h extra` : ""}{today ? "" : ` · ${p.sub} days submitted`}</span>
+                  {p.att?.sessions?.length > 0 && <span className="sub">{attTxt(p.att.sessions)}</span>}
                   {p.day && (p.day.note || p.day.plan) && <span className="sub">{p.day.note}{p.day.plan ? ` · Tomorrow: ${p.day.plan}` : ""}</span>}</span>
                 <span className="num">{h1(p.hrs)} h</span>
                 {p.day ? <span className="pill p-ok">Day sent {p.day.at}</span> : <span className="pill p-amb">Today open</span>}
@@ -417,8 +430,56 @@ function Work({ accounts, today }) {
           ) : <div className="empty">No active employees in this team yet.</div>}
         </div>
       </div>
+      ) : (
+        <div className="card"><h3>People <small>{RANGES.find(r => r[0] === rg)[1].toLowerCase()} · click a person to see all their work</small></h3>
+          {W.loading ? <div className="empty">Loading…</div> : per.length ? (
+            <div className="ll flat ep-people">{per.filter(p => !who || p.a.id === who).map(p => (
+              <button type="button" key={p.a.id} onClick={() => setPerson(p.a.id)}>
+                <Av name={p.a.name} role={p.a.role} />
+                <span className="x"><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]} · {p.n} items · {p.sub} days submitted{p.extra ? ` · ${h1(p.extra)} h extra` : ""}</span></span>
+                <span className="num">{h1(p.hrs)} h</span>
+                {p.day ? <span className="pill p-ok">Today sent {p.day.at}</span> : <span className="pill p-amb">Today open</span>}
+                <ChevronRight size={16} className="ep-go" />
+              </button>
+            ))}</div>
+          ) : <div className="empty">No active employees in this team yet.</div>}
+        </div>
+      )}
+      {person && <PersonWork a={acc(person)} work={work.filter(w => String(w.account) === person)} days={days.filter(x => String(x.account) === person)}
+        attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={RANGES.find(r => r[0] === rg)[1]} onClose={() => setPerson(null)} />}
       {assign && <AssignTask accounts={accounts.filter(a => a.status === "active" && (!roles || roles.includes(a.role)))} init={assign} onClose={() => setAssign(null)} onDone={() => setAssign(null)} />}
     </>
+  );
+}
+
+// Everything one employee logged in the period, day by day, with their check in / out and day note
+function PersonWork({ a, work, days, attendance, period, onClose }) {
+  const dates = [...new Set([...work.map(w => w.date), ...days.map(x => x.date), ...attendance.filter(x => x.sessions?.length).map(x => x.date)])].sort().reverse();
+  const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0), extra = work.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0);
+  if (!a) return null;
+  return (
+    <Modal title={`${a.name} · ${period}`} onClose={onClose} wide>
+      <p className="sub" style={{ marginTop: 0 }}>{ROLES[a.role]?.[0]} · {work.length} items · {h1(hrs)} h{extra ? ` (${h1(extra)} h extra)` : ""} · {days.length} days submitted</p>
+      {dates.length ? dates.map(dt => {
+        const L = work.filter(w => w.date === dt), day = days.find(x => x.date === dt), att = attendance.find(x => x.date === dt);
+        return (
+          <div key={dt} className="ep-pday">
+            <div className="ep-pday-h"><b>{fd(dt)}</b>
+              <span className="sub">{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h · {L.length} items{att?.sessions?.length ? ` · ${attTxt(att.sessions)}` : ""}</span>
+              {day ? <span className="pill p-ok">Sent {day.at}</span> : <span className="pill p-amb">Not submitted</span>}</div>
+            {day && (day.note || day.plan) && <div className="sub ep-pnote">{day.note}{day.plan ? `${day.note ? " · " : ""}Tomorrow: ${day.plan}` : ""}</div>}
+            <div className="ll flat">{L.map(e => (
+              <div key={e._id}>
+                <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
+                  <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
+                  {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}</span>
+                <span className="num">{h1(e.hrs)} h</span>
+              </div>
+            ))}{!L.length && <div className="empty">Nothing logged.</div>}</div>
+          </div>
+        );
+      }) : <div className="empty">Nothing logged in this period.</div>}
+    </Modal>
   );
 }
 
@@ -501,6 +562,11 @@ function Meetings() {
   const [open, setOpen] = useState(null);
   const L = M.data || [];
   const sent = (m) => m.sentWa || m.sentMail;
+  // The list leaves photos out to stay fast; load them when a meeting is opened
+  const view = (m) => {
+    setOpen(m);
+    papi(`/meetings/${m._id}`).then(j => setOpen(o => (o?._id === m._id ? j.data : o)), (ex) => toast.error(ex.message));
+  };
   return (
     <>
       <div className="kpis">
@@ -518,7 +584,7 @@ function Meetings() {
             <td>{m.account?.name || "-"}<span className="sub">{ROLES[m.account?.role]?.[0]}</span></td>
             <td>{fdw(m.date)}{m.time ? `, ${m.time}` : ""}</td>
             <td>{!m.momTxt ? <span className="pill p-amb">Notes only</span> : sent(m) ? <span className="pill p-ok">Sent{m.sentWa ? " · WhatsApp" : ""}{m.sentMail ? " · Email" : ""}</span> : <span className="pill p-blue">Not sent</span>}</td>
-            <td className="r"><button type="button" className="btn sm" onClick={() => setOpen(m)}>View</button></td>
+            <td className="r"><button type="button" className="btn sm" onClick={() => view(m)}>View</button></td>
           </tr>
         )) : <tr><td colSpan={6}><div className="empty">No meetings yet. Meetings logged by employees appear here.</div></td></tr>}</tbody>
       </table></div></div>
@@ -526,6 +592,9 @@ function Meetings() {
         <Modal title={open.title} onClose={() => setOpen(null)} wide>
           <p className="sub">{[open.refName || "Internal", fdw(open.date), open.account?.name].filter(Boolean).join(" · ")}</p>
           <pre className="ep-mom">{open.momTxt || open.notes}</pre>
+          {open.files?.length > 0 && <div className="ep-docs">{open.files.map(f => (
+            <a key={f.url} href={/^https?:/.test(f.url) ? f.url : `${API}${f.url}`} target="_blank" rel="noopener noreferrer" className="btn sm">{f.name}</a>
+          ))}</div>}
           {open.images?.length > 0 && <div className="ep-thumbs">{open.images.map((s, i) => (
             <a key={i} href={s} target="_blank" rel="noopener noreferrer"><img src={s} alt={`Attachment ${i + 1}`} /></a>
           ))}</div>}

@@ -106,9 +106,8 @@ export default function TeamChat() {
           )}
         </div>
       )}
-      <button type="button" className="nnc-tc-fab" onClick={() => setOpen(o => !o)} aria-label={`Team chat${unread ? `, ${unread} unread` : ""}`}>
-        {open ? <X size={22} /> : <MessageSquareText size={22} />}
-        {!open && <span className="nnc-tc-lbl">Team chat</span>}
+      <button type="button" className={`nnc-tc-fab${unread > 0 ? " has-new" : ""}`} onClick={() => setOpen(o => !o)} title="Team chat" aria-label={`Team chat${unread ? `, ${unread} unread` : ""}`}>
+        {open ? <X size={20} /> : <MessageSquareText size={20} />}
         {unread > 0 && !open && <em>{unread > 99 ? "99+" : unread}</em>}
       </button>
     </div>

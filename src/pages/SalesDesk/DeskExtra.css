@@ -31,6 +31,18 @@
 .sd-modal input, .sd-modal select, .sd-modal textarea, .sd-box input, .sd-box select { width: 100%; height: 40px; border: 1px solid #E8ECF1; border-radius: 10px; padding: 0 10px; background: #fff; color: #1D2433; font-family: inherit; font-size: 14px; box-sizing: border-box; }
 .sd-modal textarea { height: auto; padding: 10px 12px; line-height: 1.5; resize: vertical; }
 .sd-modal select.sd-pick { height: auto; padding: 4px; }
+.sd-picklist { display: flex; flex-direction: column; max-height: 210px; overflow-y: auto; border: 1px solid #E8ECF1; border-radius: 10px; margin-top: 6px; }
+.sd-picklist button { display: flex; align-items: center; gap: 4px; text-align: left; border: 0; border-bottom: 1px solid #F1F4F8; background: #fff; padding: 9px 12px; font: inherit; font-size: 13.5px; color: #1D2433; cursor: pointer; }
+.sd-picklist button:last-child { border-bottom: 0; }
+.sd-picklist button:hover, .sd-picklist button:focus-visible { background: #EEF3FF; outline: none; }
+.sd-picklist b { color: #0D1B3E; font-weight: 600; }
+.sd-picklist .sd-note { padding: 10px 12px; }
+.sd-f .sd-pk { margin-left: auto; font-size: 11.5px; font-weight: 600; color: #667085; background: #F1F4F8; border-radius: 20px; padding: 2px 8px; white-space: nowrap; }
+.sd-f .sd-pk.pj { color: #0F7B3E; background: #E3F6E8; }
+.sd-picked { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px solid #BFD3FF; background: #EEF3FF; border-radius: 10px; padding: 10px 12px; }
+.sd-picked > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sd-picked b { color: #0D1B3E; font-size: 14.5px; }
+.sd-f .sd-picked span { font-size: 12.5px; color: #667085; }
 .sd-g2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .sd-macts { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; margin-top: 4px; }
 .sd-bulkwho { display: flex; flex-direction: column; gap: 2px; }
