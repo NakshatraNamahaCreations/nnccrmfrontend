@@ -28,6 +28,7 @@ import IntegrationsPage  from "./pages/Integrations/IntegrationsPage";
 import MonthlyBillingPage from "./pages/ProjectBilling/MonthlyBillingPage";
 import SalesDesk from "./pages/SalesDesk/SalesDesk";
 import SeoTeam from "./pages/SeoTeam/SeoTeam";
+import EmployeePortal from "./pages/EmployeePortal/EmployeePortal";
 
 function isAuthed() {
   try {
@@ -100,6 +101,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <Documents />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/employee-portal"
+        element={
+          <ProtectedRoute>
+            <EmployeePortal />
           </ProtectedRoute>
         }
       />

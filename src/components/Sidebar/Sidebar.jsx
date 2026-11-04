@@ -30,6 +30,7 @@ import {
 } from "lucide-react";
 import nncLogo from "../../assets/nnclogo.png";
 import "./Sidebar.css";
+import TeamChat from "../TeamChat/TeamChat";
 
 /* Bottom nav items shown on mobile (most-used pages) */
 const BOTTOM_NAV = [
@@ -123,6 +124,7 @@ export default function Sidebar() {
         { label: "Owner's Desk",      path: "/owner-desk",  moduleKey: "owner-desk",        icon: <Briefcase size={15} /> },
         { label: "All Leads",         path: "/sales-desk",  moduleKey: "all-leads",         icon: <Headset size={15} />, badge: newEnquiryCount || null },
         { label: "SEO & Ads Team",    path: "/seo-team",    moduleKey: "seo-team",          icon: <SearchCheck size={15} /> },
+        { label: "Employee Portal",   path: "/employee-portal", moduleKey: "employee-portal", icon: <UserCheck size={15} /> },
         { label: "NNC Credentials", path: "/credentials", moduleKey: "credentials-vault", icon: <ShieldCheck size={15} /> },
         { label: "Today's Plan",  path: "/todays-plan", moduleKey: "todays-plan", icon: <ClipboardList size={15} /> },
         { label: "Dashboard",     path: "/dashboard",   moduleKey: "dashboard",   icon: <LayoutDashboard size={15} /> },
@@ -274,6 +276,9 @@ export default function Sidebar() {
           <span className="sbMobileNavLabel">More</span>
         </button>
       </nav>
+
+      {/* Team chat with Employee Portal staff */}
+      {canSee("employee-portal") && <TeamChat />}
     </>
   );
 }

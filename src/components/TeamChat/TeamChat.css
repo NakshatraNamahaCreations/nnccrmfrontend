@@ -1,0 +1,50 @@
+/* Floating team chat — every rule scoped to .nnc-tc */
+.nnc-tc { --pri: #2563EB; --navy: #0F172A; --line: #E5E9F0; --mut: #64748B; --text: #1E293B;
+  position: fixed; right: 22px; bottom: 20px; z-index: 1050; font-family: inherit; }
+.nnc-tc *, .nnc-tc *::before, .nnc-tc *::after { box-sizing: border-box; }
+.nnc-tc button, .nnc-tc textarea { font-family: inherit; }
+.nnc-tc-fab { position: relative; display: inline-flex; align-items: center; gap: 9px; height: 50px; padding: 0 18px 0 15px; border: 0; border-radius: 25px; background: linear-gradient(135deg, #2563EB, #4F46E5); color: #fff; font-weight: 600; font-size: 14px; cursor: pointer; box-shadow: 0 10px 28px rgba(37, 99, 235, .4); }
+.nnc-tc.open .nnc-tc-fab { width: 50px; padding: 0; justify-content: center; }
+.nnc-tc-fab em { position: absolute; top: -6px; right: -6px; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 11px; background: #DC2626; color: #fff; font-style: normal; font-size: 11.5px; font-weight: 700; display: grid; place-items: center; border: 2px solid #fff; }
+.nnc-tc-panel { position: absolute; right: 0; bottom: 62px; width: 370px; height: min(540px, calc(100vh - 110px)); background: #fff; border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 24px 64px rgba(15, 23, 42, .25); display: flex; flex-direction: column; overflow: hidden; }
+.nnc-tc-h { display: flex; align-items: center; gap: 10px; padding: 12px 14px; background: var(--navy); color: #fff; }
+.nnc-tc-ht { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nnc-tc-ht b { font-size: 14.5px; }
+.nnc-tc-ht span { font-size: 11.5px; color: #94A3B8; }
+.nnc-tc-ib { width: 32px; height: 32px; border-radius: 9px; border: 0; background: rgba(255, 255, 255, .08); color: #fff; display: grid; place-items: center; cursor: pointer; flex: none; }
+.nnc-tc-list { flex: 1; overflow-y: auto; padding-top: 6px; }
+.nnc-tc-row { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; background: #fff; padding: 10px 14px; cursor: pointer; }
+.nnc-tc-row:hover { background: #F8FAFC; }
+.nnc-tc-row.un b { font-weight: 700; }
+.nnc-tc-av { width: 34px; height: 34px; border-radius: 50%; color: #fff; font-size: 12px; font-weight: 600; display: grid; place-items: center; flex: none; }
+.nnc-tc-av.grp { background: #EFF4FF; color: var(--pri); border-radius: 11px; }
+.nnc-tc-rx { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nnc-tc-rx b { font-size: 13.5px; font-weight: 600; color: var(--navy); }
+.nnc-tc-rx span { font-size: 12px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nnc-tc-rm { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.nnc-tc-rm small { font-size: 10.5px; color: var(--mut); }
+.nnc-tc-rm em { font-style: normal; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--pri); color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
+.nnc-tc-note { font-size: 12px; color: var(--mut); padding: 10px 14px; margin: 6px 0 0; border-top: 1px solid var(--line); }
+.nnc-tc-empty { padding: 24px 16px; text-align: center; color: var(--mut); font-size: 13px; }
+.nnc-tc-body { flex: 1; overflow-y: auto; padding: 12px; background: #F6F8FB; display: flex; flex-direction: column; gap: 2px; }
+.nnc-tc-m { display: flex; gap: 7px; align-items: flex-end; }
+.nnc-tc-m.first { margin-top: 8px; }
+.nnc-tc-m.me { justify-content: flex-end; }
+.nnc-tc-m .nnc-tc-av { width: 28px; height: 28px; font-size: 10.5px; }
+.nnc-tc-bub { max-width: 78%; background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 7px 11px; display: flex; flex-direction: column; gap: 1px; color: var(--text); }
+.nnc-tc-m.me .nnc-tc-bub { background: var(--pri); border-color: var(--pri); color: #fff; }
+.nnc-tc-who { font-size: 12px; color: var(--navy); }
+.nnc-tc-who span { font-weight: 500; color: var(--mut); font-size: 11px; }
+.nnc-tc-txt { white-space: pre-wrap; word-break: break-word; font-size: 13.5px; line-height: 1.45; }
+.nnc-tc-bub small { font-size: 10px; opacity: .65; align-self: flex-end; }
+.nnc-tc-f { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--line); align-items: flex-end; }
+.nnc-tc-f textarea { flex: 1; resize: none; min-height: 40px; max-height: 120px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 12px; font-size: 13.5px; }
+.nnc-tc-send { width: 40px; height: 40px; border-radius: 12px; border: 0; background: var(--pri); color: #fff; display: grid; place-items: center; cursor: pointer; flex: none; }
+.nnc-tc-send:disabled { opacity: .45; cursor: default; }
+@media (max-width: 900px) {
+  .nnc-tc { right: 14px; bottom: 84px; }
+  .nnc-tc-lbl { display: none; }
+  .nnc-tc-fab { width: 52px; padding: 0; justify-content: center; }
+  .nnc-tc-panel { position: fixed; left: 8px; right: 8px; bottom: 146px; width: auto; height: calc(100vh - 170px); }
+}
+@media print { .nnc-tc { display: none; } }
