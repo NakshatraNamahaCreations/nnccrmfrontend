@@ -7,8 +7,8 @@ import { initials } from "../SeoTeam/seoUtil";
 // Chat with each employee in the Employee Portal, plus announcements to everyone
 const papi = (path, opts) => billingApi(`/portal/admin${path}`, opts);
 const tm = (d) => new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
-const ROLE = { seo: "SEO analyst", ads: "Google Ads expert", gfx: "Graphic designer", app: "App developer", web: "Website developer", back: "Backend developer", full: "Full stack developer", ux: "UI/UX designer", test: "Tester", acc: "Accountant" };
-const TEAM = [["", "Everyone"], ["seo,ads,gfx", "SEO and Ads team"], ["app,web,back,full,ux,test", "Development and design"], ["acc", "Accounts"]];
+const ROLE = { seo: "SEO analyst", seox: "SEO expert", ads: "Google Ads expert", gfx: "Graphic designer", app: "App developer", web: "Website developer", back: "Backend developer", full: "Full stack developer", ux: "UI/UX designer", test: "Tester", other: "Team member", acc: "Accountant" };
+const TEAM = [["", "Everyone"], ["seo,seox,ads,gfx", "Digital Marketing"], ["app,web,back,full,ux,test,other", "Development and design"], ["acc", "Accounts"]];
 
 export default function PortalChat({ onUnread }) {
   const [threads, setThreads] = useState(null);

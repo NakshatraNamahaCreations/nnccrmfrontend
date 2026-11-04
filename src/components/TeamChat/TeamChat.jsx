@@ -5,9 +5,9 @@ import { toast } from "../../utils/toast";
 import "./TeamChat.css";
 
 // Floating team chat in the CRM: the admin joins the Employee Portal group channels
-// (Everyone, Development and design, SEO and Ads). Employees chat from the portal.
+// (Everyone, Development and design, Digital Marketing). Employees chat from the portal.
 const tapi = (path, opts) => billingApi(`/portal/admin/team${path}`, opts);
-const ROLE = { admin: ["Admin", "#0F172A"], seo: ["SEO analyst", "#0891B2"], ads: ["Google Ads expert", "#D97706"], gfx: ["Graphic designer", "#DB2777"], app: ["App developer", "#2563EB"], web: ["Website developer", "#0D9488"], back: ["Backend developer", "#4F46E5"], full: ["Full stack developer", "#0369A1"], ux: ["UI/UX designer", "#DB2777"], test: ["Tester", "#7C3AED"], acc: ["Accountant", "#475569"] };
+const ROLE = { admin: ["Admin", "#0F172A"], seo: ["SEO analyst", "#0891B2"], seox: ["SEO expert", "#0E7490"], ads: ["Google Ads expert", "#D97706"], gfx: ["Graphic designer", "#DB2777"], app: ["App developer", "#2563EB"], web: ["Website developer", "#0D9488"], back: ["Backend developer", "#4F46E5"], full: ["Full stack developer", "#0369A1"], ux: ["UI/UX designer", "#DB2777"], test: ["Tester", "#7C3AED"], other: ["Team member", "#64748B"], acc: ["Accountant", "#475569"] };
 const ini = (n) => String(n || "?").split(/\s+/).filter(Boolean).map(x => x[0]).join("").slice(0, 2).toUpperCase();
 const tm = (d) => {
   const x = new Date(d);

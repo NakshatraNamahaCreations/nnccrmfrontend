@@ -13,11 +13,11 @@ import PortalChat from "./PortalChat";
 const papi = (path, opts) => billingApi(`/portal/admin${path}`, opts);
 
 const ROLES = {
-  seo: ["SEO analyst", "SEO and Google Ads", "#0891B2"], ads: ["Google Ads expert", "SEO and Google Ads", "#D97706"], gfx: ["Graphic designer", "SEO and Google Ads", "#DB2777"],
+  seo: ["SEO analyst", "Digital Marketing", "#0891B2"], seox: ["SEO expert", "Digital Marketing", "#0E7490"], ads: ["Google Ads expert", "Digital Marketing", "#D97706"], gfx: ["Graphic designer", "Design", "#DB2777"],
   app: ["App developer", "Development", "#2563EB"], web: ["Website developer", "Development", "#0D9488"], back: ["Backend developer", "Development", "#4F46E5"], full: ["Full stack developer", "Development", "#0369A1"],
-  ux: ["UI/UX designer", "Design", "#DB2777"], test: ["Tester", "Testing", "#7C3AED"], acc: ["Accountant", "Accounts", "#475569"],
+  ux: ["UI/UX designer", "Design", "#DB2777"], test: ["Tester", "Testing", "#7C3AED"], other: ["Team member", "Development", "#64748B"], acc: ["Accountant", "Accounts", "#475569"],
 };
-const TEAMS = { all: ["Everyone", null], seo: ["SEO and Ads", ["seo", "ads", "gfx"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test"]], acc: ["Accounts", ["acc"]] };
+const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seox", "ads", "gfx"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test", "other"]], acc: ["Accounts", ["acc"]] };
 const TY = {
   backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign change", negative: "Negative keywords", newad: "New ad or campaign",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
@@ -60,13 +60,14 @@ function useGet(path) {
   const [st, setSt] = useState({ data: null, err: "", key: "" });
   const [n, setN] = useState(0);
   useEffect(() => {
+    if (!path) return undefined;
     let live = true;
     papi(path).then(j => live && setSt({ data: j.data, err: "", key: path }),
       e => live && setSt({ data: null, err: e.status === 403 ? "You don't have access to the Employee Portal module." : e.message, key: path }));
     return () => { live = false; };
   }, [path, n]);
   const fresh = st.key === path;
-  return { data: fresh ? st.data : null, err: fresh ? st.err : "", loading: !fresh, reload: useCallback(() => setN(x => x + 1), []) };
+  return { data: fresh ? st.data : null, err: fresh ? st.err : "", loading: !!path && !fresh, reload: useCallback(() => setN(x => x + 1), []) };
 }
 
 const Role = ({ r }) => <>{ROLES[r]?.[0] || r}<span className="sub">{ROLES[r]?.[1]}</span></>;
@@ -157,7 +158,7 @@ function People({ A }) {
               <td><Role r={a.role} /></td>
               <td>{a.email}<span className="sub">{a.phone}</span></td>
               <td className="ep-works">{a.orphan ? <span className="pill p-red">Removed from the CRM team</span>
-                : a.worksOn || (a.status === "active" ? <span className="sub">Not assigned yet · <Link to={["seo", "ads", "gfx"].includes(a.role) ? "/seo-team" : "/leads"}>assign</Link></span> : "-")}</td>
+                : a.worksOn || (a.status === "active" ? <span className="sub">Not assigned yet · <Link to={["seo", "seox", "ads", "gfx"].includes(a.role) ? "/seo-team" : "/leads"}>assign</Link></span> : "-")}</td>
               <td>{when(a.lastLogin)}<span className="sub">{a.logins} sign ins</span></td>
               <td>{a.status === "active" ? <span className="pill p-ok">Active</span> : a.status === "pending" ? <span className="pill p-amb">Waiting</span> : <span className="pill p-red">Disabled</span>}
                 {a.mustChange && <span className="sub">temporary password</span>}</td>
@@ -179,7 +180,7 @@ function People({ A }) {
       {ask && (
         <Modal title={ask.kind === "reset" ? `Reset ${ask.a.name}'s password?` : ask.kind === "delete" ? `Delete ${ask.a.name}?` : `${ask.a.status === "pending" ? "Reject" : "Disable"} ${ask.a.name}?`} onClose={() => setAsk(null)}>
           <p>{ask.kind === "reset" ? "You get a temporary password to share. They choose a new one when they sign in."
-            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "ads", "gfx"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "Settings → Developers and every project"}. Work they already logged stays in the history. This cannot be undone.`
+            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "seox", "ads", "gfx"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "Settings → Developers and every project"}. Work they already logged stays in the history. This cannot be undone.`
               : "They can no longer sign in to the Employee Portal. Their logged work stays."}</p>
           <div className="ep-row">
             <button type="button" className="btn" onClick={() => setAsk(null)}>Cancel</button>
@@ -299,26 +300,48 @@ function Work({ accounts, today }) {
 
 function AssignTask({ accounts, init, onClose, onDone }) {
   const [busy, setBusy] = useState(false);
+  const [who, setWho] = useState(init.account || "");
+  const Pj = useGet(who ? `/accounts/${who}/projects` : "");
   const submit = async (ev) => {
     ev.preventDefault(); const f = Object.fromEntries(new FormData(ev.target));
+    const ref = f.refId === "__other" ? "" : f.refId || "";
     setBusy(true);
-    try { await papi("/tasks", { method: "POST", body: { account: f.account, title: f.title.trim(), refName: f.refName.trim(), due: f.due } }); toast.success("Task assigned"); onDone(); }
+    try { await papi("/tasks", { method: "POST", body: { account: f.account, title: f.title.trim(), refId: ref, refName: (f.refName || "").trim(), due: f.due } }); toast.success("Task assigned"); onDone(); }
     catch (ex) { toast.error(ex.message); }
     finally { setBusy(false); }
   };
   return (
     <Modal title="Assign a task" onClose={onClose}>
       <form onSubmit={submit} className="ep-form">
-        <label className="f"><span className="flabel">Employee</span><select name="account" required defaultValue={init.account || ""}>
+        <label className="f"><span className="flabel">Employee</span><select name="account" required value={who} onChange={e => setWho(e.target.value)}>
           <option value="">Choose</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {ROLES[a.role]?.[0]}</option>)}</select></label>
         <label className="f"><span className="flabel">Task</span><input name="title" type="text" required /></label>
         <div className="g2">
-          <label className="f"><span className="flabel">Client or project (optional)</span><input name="refName" type="text" /></label>
+          <ProjectPick key={who} who={who} loading={Pj.loading} list={Pj.data} />
           <label className="f"><span className="flabel">Due</span><input name="due" type="date" required defaultValue={T(0)} min={T(0)} /></label>
         </div>
         <div className="ep-row"><button className="btn pri" disabled={busy}>{busy ? "Saving…" : "Assign"}</button></div>
       </form>
     </Modal>
+  );
+}
+
+// Project (or SEO client) the task is for: the employee's own first, then every other project
+function ProjectPick({ who, loading, list }) {
+  const [v, setV] = useState("");
+  const mine = list?.mine || [], others = list?.others || [];
+  const isClient = mine[0]?.kind === "client";
+  const opt = p => <option key={p.id} value={p.id}>{p.name}{p.stage ? ` · ${p.stage}` : ""}</option>;
+  return (
+    <label className="f"><span className="flabel">{isClient ? "Client" : "Project"} (optional)</span>
+      <select name="refId" value={v} onChange={e => setV(e.target.value)} disabled={!who || loading}>
+        <option value="">{!who ? "Choose the employee first" : loading ? "Loading…" : "Not for a project"}</option>
+        {mine.length > 0 && <optgroup label={isClient ? "Their clients" : "Their projects"}>{mine.map(opt)}</optgroup>}
+        {others.length > 0 && <optgroup label="Other projects">{others.map(opt)}</optgroup>}
+        <option value="__other">Something else (type it)</option>
+      </select>
+      {v === "__other" && <input name="refName" type="text" placeholder="Client or project name" style={{ marginTop: 8 }} />}
+    </label>
   );
 }
 

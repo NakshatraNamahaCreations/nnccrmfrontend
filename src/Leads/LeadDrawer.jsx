@@ -102,7 +102,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
   const [logSaving, setLogSaving] = useState(false);
 
   const [uploading, setUploading] = useState(false);
-  const [docTag, setDocTag] = useState("Invoice");
+  const [docTag, setDocTag] = useState("Project Document");
 
   const [followupOpen, setFollowupOpen] = useState(false);
   const [followupSaving, setFollowupSaving] = useState(false);
@@ -1639,6 +1639,7 @@ function DocsTab({ lead, uploading, docTag, setDocTag, uploadDoc, apiBase, onDoc
 
           <div className="docUpload">
             <select value={docTag} onChange={(e) => setDocTag(e.target.value)}>
+              <option>Project Document</option>
               <option>Invoice</option>
               <option>Quotation</option>
               <option>MoM</option>

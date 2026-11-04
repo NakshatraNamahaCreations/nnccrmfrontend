@@ -919,6 +919,9 @@ function RepsTab({ toast }) {
 // TAB — Developers (who works on which project)
 // ══════════════════════════════════════════════════════════════════════════════
 const DEV_ROLES = ["Full Stack","Frontend","Backend","Mobile App","UI/UX Designer","WordPress / CMS","Tester / QA","Other"];
+// the role each one gets in the Employee Portal (decides their dashboard and what they can log)
+const DEV_PORTAL_ROLE = { "Full Stack":"Full stack developer", Frontend:"Website developer", Backend:"Backend developer", "Mobile App":"App developer",
+  "UI/UX Designer":"UI/UX designer", "WordPress / CMS":"Website developer", "Tester / QA":"Tester", Other:"Team member (other)" };
 const isDone = p => p.projectCompleted || p.projectStage === "Project Completed";
 
 function StagePill({ p }) {
@@ -934,6 +937,7 @@ function DevelopersTab({ toast }) {
   const [del,      setDel]      = useState(null);
   const [open,     setOpen]     = useState(null);   // expanded developer id
   const [pSearch,  setPSearch]  = useState("");
+  const [saving,   setSaving]   = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -960,12 +964,15 @@ function DevelopersTab({ toast }) {
     if (data.portalPassword && !String(data.email || "").trim()) return toast("error", "Add the email: it is their Employee Portal login");
     if (data.portalPassword && (data.portalPassword.length < 8 || !/\d/.test(data.portalPassword))) return toast("error", "Portal password needs at least 8 characters and a number");
     const isCreate = modal.mode === "create";
+    if (saving) return;                       // a second click would add the developer twice
+    setSaving(true);
     try {
       const j = await api(isCreate ? "POST" : "PUT", isCreate ? "/api/developers" : `/api/developers/${data._id}`, data);
       if (!j.success) throw new Error(j.message);
       toast("success", data.portalPassword ? `${isCreate ? "Developer added" : "Developer updated"}. They can sign in to the Employee Portal with ${data.email}` : isCreate ? "Developer added" : "Developer updated");
       setModal(null); load();
     } catch(e) { toast("error", e.message || "Failed"); }
+    finally { setSaving(false); }
   };
 
   const confirmDel = async () => {
@@ -1006,7 +1013,7 @@ function DevelopersTab({ toast }) {
                       <strong>{d.name}</strong>
                       {d.skills && <div className="st-dev-skills">{d.skills}</div>}
                     </td>
-                    <td><span className="st-pill">{d.role}</span></td>
+                    <td><span className="st-pill">{d.role}</span>{DEV_PORTAL_ROLE[d.role] && <div className="st-dev-skills" style={{ marginTop:4 }}>Portal: {DEV_PORTAL_ROLE[d.role]}</div>}</td>
                     <td>
                       <div>{d.phone || "—"}</div>
                       {d.email && <div className="st-mono st-dev-skills">{d.email}</div>}
@@ -1068,8 +1075,9 @@ function DevelopersTab({ toast }) {
                 <Field label="Full Name"><Input placeholder="e.g. Kiran Kumar" value={modal.data.name} onChange={e => setData({ name:e.target.value })}/></Field>
                 <Field label="Role">
                   <Select value={modal.data.role} onChange={e => setData({ role:e.target.value })}>
-                    {DEV_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+                    {DEV_ROLES.map(r => <option key={r} value={r}>{r} · portal: {DEV_PORTAL_ROLE[r]}</option>)}
                   </Select>
+                  <div className="st-dev-skills" style={{ marginTop:6 }}>SEO, Google Ads and graphic designers are added in SEO &amp; Ads Team.</div>
                 </Field>
                 <Field label="Phone (optional)"><Input placeholder="+91 98765 43210" value={modal.data.phone || ""} onChange={e => setData({ phone:e.target.value })}/></Field>
                 <Field label="Email (optional)"><Input type="email" placeholder="dev@nnc.in" value={modal.data.email || ""} onChange={e => setData({ email:e.target.value })}/></Field>
@@ -1127,7 +1135,7 @@ function DevelopersTab({ toast }) {
             </div>
             <div className="st-modal-footer">
               <button className="st-btn-ghost" onClick={() => setModal(null)}>Cancel</button>
-              <button className="st-btn-primary" onClick={() => save(modal.data)}><Save size={14}/> Save</button>
+              <button className="st-btn-primary" onClick={() => save(modal.data)} disabled={saving}>{saving ? <RefreshCcw size={14} className="st-spin"/> : <Save size={14}/>} {saving ? "Saving…" : "Save"}</button>
             </div>
           </div>
         </div>
