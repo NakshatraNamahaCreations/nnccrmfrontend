@@ -24,7 +24,7 @@ export default function PortalChat({ onUnread }) {
     let live = true;
     const load = () => papi("/threads").then(j => { if (live) { setThreads(j.data); onUnread?.(j.data.reduce((a, t) => a + t.unread, 0)); } }, () => live && setThreads(t => t || []));
     load();
-    const t = setInterval(load, 30000);
+    const t = setInterval(load, 5000);
     return () => { live = false; clearInterval(t); };
   }, [tick, onUnread]);
   useEffect(() => {
@@ -32,7 +32,7 @@ export default function PortalChat({ onUnread }) {
     let live = true;
     const load = () => papi(`/messages/${sel}`).then(j => live && setMsgs(j.data), () => {});
     load();
-    const t = setInterval(load, 20000);
+    const t = setInterval(load, 2500);
     return () => { live = false; clearInterval(t); };
   }, [sel, tick]);
   useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs]);

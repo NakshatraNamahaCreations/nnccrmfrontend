@@ -49,3 +49,14 @@
 .ep .ep-pwin { position: relative; display: block; }
 .ep .ep-pwin input { width: 100%; height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 42px 0 10px; }
 .ep .ep-pwin button { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: none; color: var(--muted); padding: 6px; display: grid; }
+
+/* project picker and list in the employee popups */
+.ep .ep-pick { max-height: 340px; overflow: auto; border: 1px solid #E2E8F0; border-radius: 10px; margin-top: 8px; }
+.ep .ep-pick label, .ep .ep-pick .row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid #F1F5F9; cursor: pointer; font-size: 14px; }
+.ep .ep-pick .row { cursor: default; justify-content: space-between; }
+.ep .ep-pick label:last-child, .ep .ep-pick .row:last-child { border-bottom: 0; }
+.ep .ep-pick label span:first-of-type { flex: 1; }
+.ep .ep-pick label.on { background: #EFF6FF; }
+.ep .ep-pick input[type="checkbox"] { width: 16px; height: 16px; flex: none; }
+.ep .ep-pick.ro { max-height: 420px; }
+.ep .link { background: none; border: 0; padding: 0; color: #2563EB; text-decoration: underline; cursor: pointer; font: inherit; }

@@ -79,7 +79,7 @@ export default function ProjectDevelopers({ lead }) {
 
       {editing && (
         all == null ? <div className="pdev-empty">Loading…</div>
-          : options.length === 0 ? <div className="pdev-empty">No developers yet — add them in Settings → Developers.</div>
+          : options.length === 0 ? <div className="pdev-empty">No developers yet — add them in Employee Portal → Add employee.</div>
           : (
             <div className="pdev-pick">
               {options.map(d => (

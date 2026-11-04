@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff } from "lucide-react";
+import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff, UserPlus, Pencil, FolderKanban } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import { billingApi } from "../ProjectBilling/billingMeta";
@@ -18,6 +18,9 @@ const ROLES = {
   ux: ["UI/UX designer", "Design", "#DB2777"], test: ["Tester", "Testing", "#7C3AED"], other: ["Team member", "Development", "#64748B"], acc: ["Accountant", "Accounts", "#475569"],
 };
 const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seox", "ads", "gfx"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test", "other"]], acc: ["Accounts", ["acc"]] };
+const PROJECT_ROLES = ["app", "web", "back", "full", "ux", "test", "other"];   // put on projects
+const SEO_ROLES = ["seo", "seox", "ads", "gfx"];                             // put on SEO clients
+const DEPTS = ["Development", "Design", "Testing", "Digital Marketing", "Accounts"];
 const TY = {
   backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign change", negative: "Negative keywords", newad: "New ad or campaign",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
@@ -127,6 +130,9 @@ function People({ A }) {
   const remove = async (a) => {
     try { await papi(`/accounts/${a.id}`, { method: "DELETE" }); toast.success(`${a.name} deleted`); A.reload(); } catch (ex) { toast.error(ex.message); }
   };
+  const [adding, setAdding] = useState(false);
+  const [editFor, setEditFor] = useState(null);
+  const [worksFor, setWorksFor] = useState(null);
   const [pwFor, setPwFor] = useState(null);
   const [pw, setPw] = useState({ v: "", show: false, busy: false });
   const savePw = async (ev) => {
@@ -148,7 +154,7 @@ function People({ A }) {
       </div>
       <div className="filters">{[["all", "All"], ["pending", "Waiting for approval"], ["active", "Active"], ["disabled", "Disabled"]].map(([k, t]) => (
         <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => setF(k)}>{t}</button>
-      ))}</div>
+      ))}<span className="sp" /><button type="button" className="btn pri" onClick={() => setAdding(true)}><UserPlus size={14} /> Add employee</button></div>
       <div className="card"><div className="tw"><table>
         <thead><tr><th>Employee</th><th>Role</th><th>Contact</th><th>Works on</th><th>Last sign in</th><th>Status</th><th /></tr></thead>
         <tbody>
@@ -158,13 +164,18 @@ function People({ A }) {
               <td><Role r={a.role} /></td>
               <td>{a.email}<span className="sub">{a.phone}</span></td>
               <td className="ep-works">{a.orphan ? <span className="pill p-red">Removed from the CRM team</span>
-                : a.worksOn || (a.status === "active" ? <span className="sub">Not assigned yet · <Link to={["seo", "seox", "ads", "gfx"].includes(a.role) ? "/seo-team" : "/leads"}>assign</Link></span> : "-")}</td>
+                : a.role === "acc" ? <span className="sub">All projects (accounts)</span>
+                : a.works.length ? <button type="button" className="btn sm" onClick={() => setWorksFor(a)}><FolderKanban size={13} /> {a.works.length} {a.works[0].kind === "client" ? "client" : "project"}{a.works.length > 1 ? "s" : ""} · View</button>
+                : a.status !== "active" ? "-"
+                : SEO_ROLES.includes(a.role) ? <span className="sub">Not assigned yet · <Link to="/seo-team">assign</Link></span>
+                : <span className="sub">Not assigned yet · <button type="button" className="link" onClick={() => setWorksFor(a)}>assign</button></span>}</td>
               <td>{when(a.lastLogin)}<span className="sub">{a.logins} sign ins</span></td>
               <td>{a.status === "active" ? <span className="pill p-ok">Active</span> : a.status === "pending" ? <span className="pill p-amb">Waiting</span> : <span className="pill p-red">Disabled</span>}
                 {a.mustChange && <span className="sub">temporary password</span>}</td>
               <td className="ep-act">
                 {a.status === "pending" && <button type="button" className="btn sm pri" onClick={() => upd(a, { status: "active" }, `${a.name} approved`)}>Approve</button>}
                 {a.status === "disabled" && <button type="button" className="btn sm" onClick={() => upd(a, { status: "active" }, "Account enabled")}>Enable</button>}
+                <button type="button" className="btn sm" title="Edit" aria-label={`Edit ${a.name}`} onClick={() => setEditFor(a)}><Pencil size={13} /></button>
                 {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => { setPw({ v: "", show: false, busy: false }); setPwFor(a); }}>Set password</button>}
                 {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => setAsk({ kind: "reset", a })}>Reset</button>}
                 {a.status !== "disabled" && <button type="button" className="btn sm late" onClick={() => setAsk({ kind: "disable", a })}>{a.status === "pending" ? "Reject" : "Disable"}</button>}
@@ -174,13 +185,17 @@ function People({ A }) {
           )) : <tr><td colSpan={7}><div className="empty">{L.length ? "Nobody in this list." : "No employees yet. When someone creates an account in the Employee Portal, they appear here to approve."}</div></td></tr>}
         </tbody>
       </table></div></div>
-      <p className="hint">Approving an account adds the person to the CRM automatically: SEO, Ads and design staff to the SEO & Ads Team, developers, designers and testers to Developers.
-        They see only the clients (SEO & Ads Team → Clients and settings) or projects (the project's developers) you assign them.</p>
+      <p className="hint">Add employees here, or approve the ones who sign up in the portal. Each employee is listed once. Developers, designers and testers are put on projects with
+        the projects button; Digital Marketing staff get their clients in SEO & Ads Team. They see only the projects or clients you assign them.</p>
+
+      {adding && <EmployeeForm onClose={() => setAdding(false)} onDone={(pwShown) => { setAdding(false); A.reload(); if (pwShown) setTmp(pwShown); }} />}
+      {editFor && <EmployeeForm a={editFor} onClose={() => setEditFor(null)} onDone={() => { setEditFor(null); A.reload(); }} />}
+      {worksFor && <WorksModal a={worksFor} onClose={() => setWorksFor(null)} onDone={() => { setWorksFor(null); A.reload(); }} />}
 
       {ask && (
         <Modal title={ask.kind === "reset" ? `Reset ${ask.a.name}'s password?` : ask.kind === "delete" ? `Delete ${ask.a.name}?` : `${ask.a.status === "pending" ? "Reject" : "Disable"} ${ask.a.name}?`} onClose={() => setAsk(null)}>
           <p>{ask.kind === "reset" ? "You get a temporary password to share. They choose a new one when they sign in."
-            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "seox", "ads", "gfx"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "Settings → Developers and every project"}. Work they already logged stays in the history. This cannot be undone.`
+            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "seox", "ads", "gfx"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "every project they are on"}. Work they already logged stays in the history. This cannot be undone.`
               : "They can no longer sign in to the Employee Portal. Their logged work stays."}</p>
           <div className="ep-row">
             <button type="button" className="btn" onClick={() => setAsk(null)}>Cancel</button>
@@ -214,6 +229,115 @@ function People({ A }) {
         </Modal>
       )}
     </>
+  );
+}
+
+// Ticks the projects an employee is on: theirs first, then every other project
+function ProjectChecks({ list, value, onChange }) {
+  const [q, setQ] = useState("");
+  const all = [...(list?.mine || []), ...(list?.others || [])];
+  const shown = all.filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()))
+    .sort((x, y) => Number(value.includes(y.id)) - Number(value.includes(x.id)));
+  const flip = (id) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
+  return (
+    <>
+      <input type="text" placeholder="Search projects…" value={q} onChange={e => setQ(e.target.value)} />
+      <div className="ep-pick">
+        {!list ? <div className="empty">Loading…</div> : shown.length ? shown.map(p => (
+          <label key={p.id} className={value.includes(p.id) ? "on" : ""}>
+            <input type="checkbox" checked={value.includes(p.id)} onChange={() => flip(p.id)} />
+            <span>{p.name}</span>{p.stage && <span className="pill p-other">{p.stage}</span>}
+          </label>
+        )) : <div className="empty">No projects found.</div>}
+      </div>
+    </>
+  );
+}
+
+// Add an employee (active straight away, with a password) or edit one's details
+function EmployeeForm({ a, onClose, onDone }) {
+  const isNew = !a;
+  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", role: a?.role || "full", password: "" });
+  const [ids, setIds] = useState([]);
+  const [show, setShow] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const Pj = useGet(isNew && PROJECT_ROLES.includes(d.role) ? "/accounts/new/projects" : "");
+  const set = (k) => (e) => setD(x => ({ ...x, [k]: e.target.value }));
+  const submit = async (ev) => {
+    ev.preventDefault();
+    if (busy) return;
+    setBusy(true);
+    try {
+      if (isNew) {
+        await papi("/accounts", { method: "POST", body: { ...d, projectIds: PROJECT_ROLES.includes(d.role) ? ids : [] } });
+        toast.success(`${d.name} added. They can sign in to the Employee Portal now`);
+        onDone({ a: { name: d.name, email: d.email, phone: d.phone }, pw: d.password, set: true });
+      } else {
+        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, role: d.role } });
+        toast.success("Employee updated"); onDone();
+      }
+    } catch (ex) { toast.error(ex.message); setBusy(false); }
+  };
+  return (
+    <Modal title={isNew ? "Add employee" : `Edit ${a.name}`} onClose={onClose} wide={isNew}>
+      <form onSubmit={submit} className="ep-form">
+        <div className="g2">
+          <label className="f"><span className="flabel">Full name</span><input type="text" required value={d.name} onChange={set("name")} /></label>
+          <label className="f"><span className="flabel">Role</span><select value={d.role} onChange={set("role")}>
+            {DEPTS.map(g => <optgroup key={g} label={g}>{Object.entries(ROLES).filter(([, r]) => r[1] === g).map(([k, r]) => <option key={k} value={k}>{r[0]}</option>)}</optgroup>)}
+          </select></label>
+          <label className="f"><span className="flabel">Email (their portal login)</span><input type="email" required disabled={!isNew} value={d.email} onChange={set("email")} /></label>
+          <label className="f"><span className="flabel">Mobile number</span><input type="tel" value={d.phone} onChange={set("phone")} /></label>
+        </div>
+        {isNew && (
+          <label className="f"><span className="flabel">Password</span>
+            <span className="ep-pwin"><input type={show ? "text" : "password"} value={d.password} onChange={set("password")} minLength={8} required autoComplete="new-password" />
+              <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? "Hide password" : "Show password"}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
+            <span className="sub">At least 8 characters, with a number. Share it with them after saving.</span></label>
+        )}
+        {isNew && PROJECT_ROLES.includes(d.role) && (
+          <div className="f"><span className="flabel">Projects ({ids.length})</span><ProjectChecks list={Pj.data} value={ids} onChange={setIds} /></div>
+        )}
+        {isNew && SEO_ROLES.includes(d.role) && <p className="sub">Assign their clients in SEO &amp; Ads Team after adding them.</p>}
+        <div className="ep-row"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn pri" disabled={busy}>{busy ? "Saving…" : isNew ? "Add employee" : "Save"}</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+// Everything an employee works on; developers, designers and testers can be moved between projects here
+function WorksModal({ a, onClose, onDone }) {
+  const canEdit = PROJECT_ROLES.includes(a.role);
+  const [editing, setEditing] = useState(!a.works.length && canEdit);
+  const [ids, setIds] = useState(a.works.filter(w => w.kind === "project").map(w => w.id));
+  const [busy, setBusy] = useState(false);
+  const Pj = useGet(editing ? `/accounts/${a.id}/projects` : "");
+  const save = async () => {
+    setBusy(true);
+    try { await papi(`/accounts/${a.id}/projects`, { method: "PUT", body: { projectIds: ids } }); toast.success("Projects updated"); onDone(); }
+    catch (ex) { toast.error(ex.message); setBusy(false); }
+  };
+  const kind = a.works[0]?.kind === "client" ? "Clients" : "Projects";
+  return (
+    <Modal title={`${a.name} · ${editing ? "choose projects" : kind.toLowerCase()}`} onClose={onClose} wide={editing}>
+      {editing ? (
+        <>
+          <ProjectChecks list={Pj.data} value={ids} onChange={setIds} />
+          <div className="ep-row"><button type="button" className="btn" onClick={() => (a.works.length ? setEditing(false) : onClose())}>Cancel</button>
+            <button type="button" className="btn pri" disabled={busy} onClick={save}>{busy ? "Saving…" : `Save ${ids.length} project${ids.length === 1 ? "" : "s"}`}</button></div>
+        </>
+      ) : (
+        <>
+          <div className="ep-pick ro">{a.works.map(w => (
+            <div key={w.id} className="row"><span>{w.name}</span>{w.stage && <span className={`pill ${w.stage === "Project Completed" ? "p-ok" : "p-blue"}`}>{w.stage}</span>}</div>
+          ))}</div>
+          <div className="ep-row">
+            {canEdit ? <button type="button" className="btn pri" onClick={() => setEditing(true)}>Change projects</button>
+              : <Link className="btn" to="/seo-team">Change clients in SEO &amp; Ads Team</Link>}
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 
