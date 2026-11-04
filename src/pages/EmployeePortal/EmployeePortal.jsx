@@ -433,15 +433,25 @@ function Work({ accounts, today }) {
       ) : (
         <div className="card"><h3>People <small>{RANGES.find(r => r[0] === rg)[1].toLowerCase()} · click a person to see all their work</small></h3>
           {W.loading ? <div className="empty">Loading…</div> : per.length ? (
-            <div className="ll flat ep-people">{per.filter(p => !who || p.a.id === who).map(p => (
-              <button type="button" key={p.a.id} onClick={() => setPerson(p.a.id)}>
-                <Av name={p.a.name} role={p.a.role} />
-                <span className="x"><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]} · {p.n} items · {p.sub} days submitted{p.extra ? ` · ${h1(p.extra)} h extra` : ""}</span></span>
-                <span className="num">{h1(p.hrs)} h</span>
-                {p.day ? <span className="pill p-ok">Today sent {p.day.at}</span> : <span className="pill p-amb">Today open</span>}
-                <ChevronRight size={16} className="ep-go" />
-              </button>
-            ))}</div>
+            <div className="tw"><table className="ep-people">
+              <thead><tr><th>Employee</th><th>Check in today</th><th>Check out today</th><th className="n">Items</th><th className="n">Days submitted</th><th className="n">Hours</th><th>Today</th><th /></tr></thead>
+              <tbody>{per.filter(p => !who || p.a.id === who).map(p => {
+                const S = p.att?.sessions || [], open = S.find(x => !x.out), last = [...S].reverse().find(x => x.out);
+                return (
+                  <tr key={p.a.id} onClick={() => setPerson(p.a.id)}>
+                    <td><div className="ep-who"><Av name={p.a.name} role={p.a.role} /><span><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]}</span></span></div></td>
+                    <td>{S.length ? <b>{tm(S[0].in)}</b> : <span className="sub">Not checked in</span>}</td>
+                    <td>{open ? <span className="pill p-ok">Still in</span> : last ? <b>{tm(last.out)}</b> : <span className="sub">-</span>}
+                      {S.length > 0 && <span className="sub">{attTxt(S).split(" · ").pop()}</span>}</td>
+                    <td className="n">{p.n}</td>
+                    <td className="n">{p.sub}</td>
+                    <td className="n"><b>{h1(p.hrs)} h</b>{p.extra > 0 && <span className="sub">{h1(p.extra)} h extra</span>}</td>
+                    <td>{p.day ? <span className="pill p-ok">Sent {p.day.at}</span> : <span className="pill p-amb">Open</span>}</td>
+                    <td className="r"><button type="button" className="btn sm" onClick={(e) => { e.stopPropagation(); setPerson(p.a.id); }}>View <ChevronRight size={14} /></button></td>
+                  </tr>
+                );
+              })}</tbody>
+            </table></div>
           ) : <div className="empty">No active employees in this team yet.</div>}
         </div>
       )}

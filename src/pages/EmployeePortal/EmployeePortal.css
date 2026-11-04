@@ -62,9 +62,14 @@
 .ep .link { background: none; border: 0; padding: 0; color: #2563EB; text-decoration: underline; cursor: pointer; font: inherit; }
 
 /* Work log: one row per person; click opens their work */
-.ep .ep-people > button { display: flex; align-items: center; gap: 12px; width: 100%; border: 0; border-bottom: 1px solid #EEF1F6; background: #fff; text-align: left; font: inherit; color: inherit; cursor: pointer; }
-.ep .ep-people > button:hover, .ep .ep-people > button:focus-visible { background: #F5F8FF; outline: none; }
-.ep .ep-people .ep-go { color: #94A3B8; flex: none; }
+.ep .ep-people tbody tr { cursor: pointer; }
+.ep .ep-people tbody tr:hover td { background: #F5F8FF; }
+.ep .ep-people td { vertical-align: middle; padding-top: 12px; padding-bottom: 12px; }
+.ep .ep-people th.n, .ep .ep-people td.n { text-align: right; white-space: nowrap; }
+.ep .ep-people td .sub { display: block; }
+.ep .ep-people td b { color: #0F172A; font-weight: 600; }
+.ep .ep-people .btn { display: inline-flex; align-items: center; gap: 2px; }
+.ep .ep-who { display: flex; align-items: center; gap: 10px; min-width: 190px; }
 .ep-pday { border: 1px solid #E8ECF1; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
 .ep-pday-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; background: #F8FAFC; border-bottom: 1px solid #E8ECF1; }
 .ep-pday-h .pill { margin-left: auto; }
