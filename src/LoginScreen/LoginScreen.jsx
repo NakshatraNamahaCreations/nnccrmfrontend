@@ -125,7 +125,7 @@ export default function LoginScreen() {
         localStorage.removeItem("nnc_modules");
       }
 
-      navigate("/todays-plan", { replace: true });
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       console.error("Login error:", err);
       const status = err?.response?.status;

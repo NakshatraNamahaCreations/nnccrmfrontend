@@ -10,7 +10,9 @@ const isAuthRoute = (url) => {
     u.includes("/auth/login")  ||
     u.includes("/auth/forgot") ||
     u.includes("/auth/reset")  ||
-    u.includes("/auth/verify")
+    u.includes("/auth/verify") ||
+    // background badge count: an old server answers 401 for it, which must not sign the admin out
+    u.includes("/portal/admin/counts")
   );
 };
 

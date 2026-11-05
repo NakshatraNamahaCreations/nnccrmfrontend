@@ -4,14 +4,12 @@ import {
   LayoutDashboard,
   Users,
   CalendarDays,
-  FileText,
   BarChart3,
   Trophy,
   Building2,
   LogOut,
   CreditCard,
   Settings,
-  ClipboardList,
   Wallet,
   TrendingUp,
   BookOpen,
@@ -30,11 +28,12 @@ import {
 import nncLogo from "../../assets/nnclogo.png";
 import "./Sidebar.css";
 import TeamChat from "../TeamChat/TeamChat";
+import { fetchPortalCounts } from "../../utils/portalSeen";
 
 /* Bottom nav items shown on mobile (most-used pages) */
 const BOTTOM_NAV = [
-  { label: "Today",  path: "/todays-plan", key: "todays-plan", icon: ClipboardList   },
-  { label: "Leads",  path: "/leads",       key: "all-leads",   icon: Users           },
+  { label: "Leads",  path: "/lead-tracker", key: "all-leads",  icon: Headset         },
+  { label: "Calendar", path: "/calendar",  key: "calendar",    icon: CalendarDays    },
   { label: "Home",   path: "/dashboard",   key: "dashboard",   icon: LayoutDashboard },
   { label: "Reports",path: "/analytics",   key: "analytics",   icon: BarChart3       },
 ];
@@ -48,6 +47,7 @@ export default function Sidebar() {
   const sbContentRef  = useRef(null);
   const scrollPosRef  = useRef(0);
   const [newEnquiryCount, setNewEnquiryCount] = useState(0);
+  const [portalCount, setPortalCount] = useState(0);
 
   useEffect(() => {
     const fetchCount = async () => {
@@ -64,6 +64,16 @@ export default function Sidebar() {
     // Poll every 30s so new leads alert on the sidebar without navigating
     const id = setInterval(fetchCount, 30000);
     return () => clearInterval(id);
+  }, [location.pathname]);
+
+  // Employee Portal: sign-ups, unread messages and new work, meetings, documents and task updates
+  useEffect(() => {
+    let live = true;
+    const load = () => fetchPortalCounts().then(r => live && setPortalCount(r.total), () => {});
+    load();
+    const id = setInterval(load, 30000);
+    window.addEventListener("nnc-portal-seen", load);
+    return () => { live = false; clearInterval(id); window.removeEventListener("nnc-portal-seen", load); };
   }, [location.pathname]);
 
   /* Close drawer on route change, but restore sidebar scroll position */
@@ -113,30 +123,21 @@ export default function Sidebar() {
     {
       title: "Overview",
       items: [
-        // Owner's Desk (/owner-desk) and the old All Leads (/sales-desk) are hidden; both pages still open by their address
-        { label: "Dashboard",     path: "/dashboard",   moduleKey: "dashboard",   icon: <LayoutDashboard size={15} /> },
-        { label: "All Leads",         path: "/lead-tracker", moduleKey: "all-leads",        icon: <Headset size={15} />, badge: newEnquiryCount || null },
-        { label: "SEO & Ads Team",    path: "/seo-team",    moduleKey: "seo-team",          icon: <SearchCheck size={15} /> },
-        { label: "Employee Portal",   path: "/employee-portal", moduleKey: "employee-portal", icon: <UserCheck size={15} /> },
-        { label: "NNC Credentials", path: "/credentials", moduleKey: "credentials-vault", icon: <ShieldCheck size={15} /> },
-        { label: "Today's Plan",  path: "/todays-plan", moduleKey: "todays-plan", icon: <ClipboardList size={15} /> },
+        // Today's Plan (/todays-plan), Documents (/documents), Owner's Desk and the old Sales Desk are hidden; the pages still open by their address
+        { label: "Dashboard",        path: "/dashboard",       moduleKey: "dashboard",         icon: <LayoutDashboard size={15} /> },
+        { label: "All Leads",        path: "/lead-tracker",    moduleKey: "all-leads",         icon: <Headset size={15} />, badge: newEnquiryCount || null },
+        { label: "Calendar",         path: "/calendar",        moduleKey: "calendar",          icon: <CalendarDays size={15} /> },
+        { label: "Quotations",       path: "/quotations",      moduleKey: "quotations",        icon: <ReceiptText size={15} /> },
       ],
     },
     {
-      title: "Sales",
+      title: "Sales & Delivery",
       items: [
-        // "All Leads" (/enquiries) is hidden: new leads are worked from All Leads (/sales-desk). The page still opens at /enquiries.
-        { label: "Projects", path: "/leads",     moduleKey: "all-leads", icon: <Users size={15} /> },
-        { label: "Monthly & Extras", path: "/monthly-billing", moduleKey: "all-leads", icon: <Repeat size={15} /> },
-        { label: "Credential Vault", path: "/integrations", moduleKey: "integrations", icon: <Plug size={15} /> },
-        { label: "Quotations", path: "/quotations",  moduleKey: "quotations",  icon: <ReceiptText size={15} /> },
-        { label: "Calendar",   path: "/calendar",    moduleKey: "calendar",    icon: <CalendarDays size={15} /> },
-      ],
-    },
-    {
-      title: "Documents",
-      items: [
-        { label: "Documents", path: "/documents", moduleKey: "documents", icon: <FileText size={15} /> },
+        { label: "Projects",         path: "/leads",           moduleKey: "all-leads",         icon: <Users size={15} /> },
+        { label: "Monthly & Extras", path: "/monthly-billing", moduleKey: "all-leads",         icon: <Repeat size={15} /> },
+        { label: "Credential Vault", path: "/integrations",    moduleKey: "integrations",      icon: <Plug size={15} /> },
+        { label: "Employee Portal",  path: "/employee-portal", moduleKey: "employee-portal",   icon: <UserCheck size={15} />, badge: portalCount ? (portalCount > 99 ? "99+" : portalCount) : null },
+        { label: "SEO & Ads Team",   path: "/seo-team",        moduleKey: "seo-team",          icon: <SearchCheck size={15} /> },
       ],
     },
     {
@@ -158,6 +159,7 @@ export default function Sidebar() {
       title: "HR",
       items: [
         { label: "Attendance & Salary", path: "/attendance", moduleKey: "attendance", icon: <UserCheck size={15} /> },
+        { label: "NNC Credentials",     path: "/credentials", moduleKey: "credentials-vault", icon: <ShieldCheck size={15} /> },
       ],
     },
   ];
@@ -194,7 +196,7 @@ export default function Sidebar() {
           <X size={16} />
         </button>
 
-        <div className="sbTop" onClick={() => goTo("/todays-plan")} style={{ cursor: "pointer" }}>
+        <div className="sbTop" onClick={() => goTo("/dashboard")} style={{ cursor: "pointer" }}>
           <div className="sbBrandRow">
             <div className="sbLogoWrap">
               <img src={nncLogo} alt="NNC Logo" className="sbLogoImage" />

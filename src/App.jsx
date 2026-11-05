@@ -319,7 +319,7 @@ export default function App() {
 
       <Route
         path="*"
-        element={<Navigate to={isAuthed() ? "/todays-plan" : "/"} replace />}
+        element={<Navigate to={isAuthed() ? "/dashboard" : "/"} replace />}
       />
     </Routes>
   );

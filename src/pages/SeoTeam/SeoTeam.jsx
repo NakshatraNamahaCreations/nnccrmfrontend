@@ -699,9 +699,10 @@ function ClientsView({ D, setModal, load }) {
     rd.readAsDataURL(file);
   };
   const Num = ({ c, k, step = 1 }) => {
-    const v = k === "budget" ? c.budget : c.targets?.[k];
+    const top = k === "budget" || k === "metaBudget";
+    const v = top ? c[k] : c.targets?.[k];
     return <input className="mini num" type="number" min="0" step={step} defaultValue={v} key={`${c.id}${k}${v}`} aria-label={k}
-      onBlur={e => Number(e.target.value) !== Number(v) && save(c, k === "budget" ? { budget: Number(e.target.value) } : { targets: { [k]: Number(e.target.value) } })} />;
+      onBlur={e => Number(e.target.value) !== Number(v) && save(c, top ? { [k]: Number(e.target.value) } : { targets: { [k]: Number(e.target.value) } })} />;
   };
   return (
     <>
@@ -723,13 +724,14 @@ function ClientsView({ D, setModal, load }) {
       </div>
 
       <div className="card"><h3>Clients <small>{D.clients.filter(c => c.isActive !== false).length} active</small><button type="button" className="btn sm pri" onClick={() => setModal({ kind: "client" })}>+ Add client</button></h3>
-        <div className="tw"><table><thead><tr><th>Client</th><th style={{ minWidth: 220 }}>Team</th><th className="r">Backlinks / month</th><th className="r">Blogs / month</th><th className="r">GMB / month</th><th className="r">Posters / month</th><th className="r">Ad budget / month</th><th className="r" /></tr></thead><tbody>
+        <div className="tw"><table><thead><tr><th>Client</th><th style={{ minWidth: 220 }}>Team</th><th className="r">Backlinks / month</th><th className="r">Blogs / month</th><th className="r">GMB / month</th><th className="r">Posters / month</th><th className="r">Google Ads budget / month</th><th className="r">Meta Ads budget / month</th><th className="r" /></tr></thead><tbody>
           {D.clients.map(c => (
             <tr key={c.id} style={c.isActive === false ? { opacity: 0.55 } : undefined}>
               <td><b style={{ fontWeight: 500 }}>{c.name}</b><span className="sub">{c.site || "no website"} · since {fds(c.start)}{c.lead ? " · CRM lead" : ""}</span></td>
               <td><TeamPick D={D} value={c.members} onChange={v => save(c, { members: v })} compact /></td>
               <td className="r"><Num c={c} k="backlink" /></td><td className="r"><Num c={c} k="blog" /></td><td className="r"><Num c={c} k="gmb" /></td><td className="r"><Num c={c} k="poster" /></td>
               <td className="r"><Num c={c} k="budget" step={1000} /></td>
+              <td className="r"><Num c={c} k="metaBudget" step={1000} /></td>
               <td className="r" style={{ whiteSpace: "nowrap" }}>
                 <button type="button" className="btn sm" onClick={() => setModal({ kind: "client", edit: c })}>Edit</button>{" "}
                 {c.isActive === false

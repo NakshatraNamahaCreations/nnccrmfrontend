@@ -8,6 +8,7 @@ import { T, fd, fdw, initials, waPhone, copy } from "../SeoTeam/seoUtil";
 import "../SeoTeam/SeoTeam.css";
 import "./EmployeePortal.css";
 import PortalChat from "./PortalChat";
+import { markSeen, fetchPortalCounts } from "../../utils/portalSeen";
 
 // Approvals and the work employees log in the NNC Employee Portal (/api/portal/admin)
 const papi = (path, opts) => billingApi(`/portal/admin${path}`, opts);
@@ -83,9 +84,21 @@ const Av = ({ name, role }) => <span className="av" style={{ background: ROLES[r
 export default function EmployeePortal() {
   const [tab, setTab] = useState("people");
   const [rk, setRk] = useState(0); // bump to reload the open tab
-  const [unread, setUnread] = useState(0);
+  const [unread, setUnread] = useState(null);
+  const [cnt, setCnt] = useState({});
   const A = useGet("/accounts");
   const pending = (A.data || []).filter(a => a.status === "pending").length;
+  // new things in each tab since it was last opened; refreshed every 30 s and when a tab is opened
+  useEffect(() => {
+    let live = true;
+    const load = () => fetchPortalCounts().then(r => live && setCnt(r.data), () => {});
+    load();
+    const id = setInterval(load, 30000);
+    window.addEventListener("nnc-portal-seen", load);
+    return () => { live = false; clearInterval(id); window.removeEventListener("nnc-portal-seen", load); };
+  }, []);
+  const open = (k) => { setTab(k); markSeen(k); };
+  const badge = (k) => k === "people" ? pending : k === "messages" ? (unread ?? cnt.messages ?? 0) : tab === k ? 0 : (cnt[k] || 0);
   return (
     <div className="seo-layout ep">
       <Sidebar />
@@ -94,7 +107,7 @@ export default function EmployeePortal() {
           <h1><UserCheck size={20} color="#2563EB" /> Employee Portal</h1>
           <nav className="tabs" aria-label="Sections">
             {TABS.map(([k, t]) => (
-              <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => setTab(k)}>{t}{k === "people" && pending > 0 && <em>{pending}</em>}{k === "messages" && unread > 0 && <em>{unread}</em>}</button>
+              <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => open(k)}>{t}{badge(k) > 0 && <em>{badge(k) > 99 ? "99+" : badge(k)}</em>}</button>
             ))}
           </nav>
           <span className="sp" />

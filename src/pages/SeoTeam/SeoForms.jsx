@@ -318,7 +318,7 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
   const [f, setF] = useState(() => ({
     lead: edit?.lead?._id || edit?.lead || "", name: edit?.name || "", contact: edit?.contact || "", phone: edit?.phone || "", email: edit?.email || "",
     site: edit?.site || "", start: edit?.start || T(0), members: edit?.members || [],
-    budget: edit?.budget ?? 0, backlink: edit?.targets?.backlink ?? 40, blog: edit?.targets?.blog ?? 4, gmb: edit?.targets?.gmb ?? 12, poster: edit?.targets?.poster ?? 6, keywords: "",
+    budget: edit?.budget ?? 0, metaBudget: edit?.metaBudget ?? 0, backlink: edit?.targets?.backlink ?? 40, blog: edit?.targets?.blog ?? 4, gmb: edit?.targets?.gmb ?? 12, poster: edit?.targets?.poster ?? 6, keywords: "",
   }));
   const [busy, run] = useBusy();
   useEffect(() => { if (!edit) seoApi("/lead-options").then(j => setLeads(j.data || [])).catch(() => setLeads([])); }, [edit]);
@@ -342,7 +342,7 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
     ev.preventDefault();
     const body = {
       lead: f.lead || null, name: f.name, contact: f.contact, phone: f.phone, email: f.email, site: f.site, start: f.start,
-      members: f.members, budget: Number(f.budget) || 0,
+      members: f.members, budget: Number(f.budget) || 0, metaBudget: Number(f.metaBudget) || 0,
       targets: { backlink: Number(f.backlink), blog: Number(f.blog), gmb: Number(f.gmb), poster: Number(f.poster) },
       ...(edit ? {} : { keywords: f.keywords.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean) }),
     };
@@ -382,7 +382,8 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
           <F label="Blogs / month"><input type="number" min="0" value={f.blog} onChange={set("blog")} /></F>
           <F label="GMB / month"><input type="number" min="0" value={f.gmb} onChange={set("gmb")} /></F>
           <F label="Posters / month"><input type="number" min="0" value={f.poster} onChange={set("poster")} /></F>
-          <F label="Ad budget / month (₹)"><input type="number" min="0" step="1000" value={f.budget} onChange={set("budget")} /></F>
+          <F label="Google Ads budget / month (₹)"><input type="number" min="0" step="1000" value={f.budget} onChange={set("budget")} /></F>
+          <F label="Meta Ads budget / month (₹)"><input type="number" min="0" step="1000" value={f.metaBudget} onChange={set("metaBudget")} /></F>
         </div>
         {!edit && <F label="Agreed keywords (one per line, optional)"><textarea rows={4} value={f.keywords} onChange={set("keywords")} placeholder={"car ceramic coating\nppf near me"} /></F>}
         {!D.team.length && <div className="hint">Tip: add team members first so you can assign them here.</div>}
