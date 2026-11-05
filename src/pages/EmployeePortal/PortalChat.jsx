@@ -4,6 +4,7 @@ import { toast } from "../../utils/toast";
 import { billingApi } from "../ProjectBilling/billingMeta";
 import { initials } from "../SeoTeam/seoUtil";
 import { useRise, useNewMessage } from "../../utils/ding";
+import { useLive, every } from "../../utils/live";
 
 const mine = (m) => m.from === "admin";
 
@@ -24,31 +25,48 @@ export default function PortalChat({ onUnread }) {
   const [busy, setBusy] = useState(false);
   const [ann, setAnn] = useState(false);
   const [tick, setTick] = useState(0);
-  const end = useRef(null);
 
   useEffect(() => {
     let live = true;
     const load = () => papi("/threads").then(j => { if (live) { setThreads(j.data); const u = j.data.reduce((a, t) => a + t.unread, 0); setThUnread(u); onUnread?.(u); } }, () => live && setThreads(t => t || []));
     load();
-    const t = setInterval(load, 5000);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(5000, load);
+    return () => { live = false; stop(); };
   }, [tick, onUnread]);
   useEffect(() => {
     if (!sel) return undefined;
     let live = true;
     const load = () => papi(`/messages/${sel}`).then(j => live && setMsgs(j.data), () => {});
     load();
-    const t = setInterval(load, 2500);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(2500, load);
+    return () => { live = false; stop(); };
   }, [sel, tick]);
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs]);
+  // an employee wrote: reload the list (and the open chat) straight away
+  useLive("pm", () => setTick(x => x + 1));
+  // Scroll only the message box (not the page), and only when a new message arrives, the person changes,
+  // or you are already at the bottom, so you can scroll up to read older messages
+  const box = useRef(null), seen = useRef({ sel: "", last: "" });
+  useEffect(() => {
+    const b = box.current;
+    if (!b) return;
+    const last = msgs[msgs.length - 1]?._id || "";
+    const s = seen.current;
+    const atEnd = b.scrollHeight - b.scrollTop - b.clientHeight < 80;
+    if (s.sel !== sel || s.last !== last || atEnd) b.scrollTop = b.scrollHeight;
+    seen.current = { sel, last };
+  }, [msgs, sel]);
 
+  // The message shows straight away; it is swapped for the saved one when the server answers
   const send = async (e) => {
     e.preventDefault();
-    if (!text.trim() || !sel) return;
-    setBusy(true);
-    try { await papi(`/messages/${sel}`, { method: "POST", body: { text: text.trim() } }); setText(""); setTick(x => x + 1); }
-    catch (ex) { toast.error(ex.message); }
+    const t = text.trim();
+    if (!t || !sel) return;
+    const tmp = { _id: `tmp-${Date.now()}`, from: "admin", by: "You", text: t, createdAt: new Date().toISOString(), pending: true };
+    setMsgs(L => [...L, tmp]); setText(""); setBusy(true);
+    try {
+      const j = await papi(`/messages/${sel}`, { method: "POST", body: { text: t } });
+      setMsgs(L => L.map(m => (m._id === tmp._id ? j.data : m)));
+    } catch (ex) { setMsgs(L => L.filter(m => m._id !== tmp._id)); setText(t); toast.error(ex.message); }
     finally { setBusy(false); }
   };
   const announce = async (ev) => {
@@ -82,18 +100,17 @@ export default function PortalChat({ onUnread }) {
           {!cur ? <div className="empty">Pick an employee to read and reply.</div> : (
             <>
               <div className="ep-conv-h"><b>{cur.name}</b><span className="sub">{ROLE[cur.role] || cur.role}{cur.status === "disabled" ? " · disabled" : ""}</span></div>
-              <div className="ep-conv-b">
+              <div className="ep-conv-b" ref={box}>
                 {msgs.length ? msgs.map(m => (
                   <div key={m._id} className={`ep-cm ${m.from === "admin" ? "me" : ""}`}>
                     <div className="bub">
                       {m.from === "admin" && <b className="who">{m.by}</b>}
                       {m.refName && <span className="about">About {m.refName}</span>}
                       <span className="txt">{m.text}</span>
-                      <small>{tm(m.createdAt)}{m.from === "admin" ? (m.readEmp ? " · seen" : " · sent") : ""}</small>
+                      <small>{m.pending ? "sending…" : <>{tm(m.createdAt)}{m.from === "admin" ? (m.readEmp ? " · seen" : " · sent") : ""}</>}</small>
                     </div>
                   </div>
                 )) : <div className="empty">No messages yet. Write the first one below.</div>}
-                <div ref={end} />
               </div>
               <form className="ep-conv-f" onSubmit={send}>
                 <textarea rows={1} value={text} onChange={e => setText(e.target.value)} placeholder={`Message ${cur.name}…`} aria-label="Message"

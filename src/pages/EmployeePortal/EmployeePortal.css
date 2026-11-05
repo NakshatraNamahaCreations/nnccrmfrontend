@@ -21,8 +21,8 @@
 @media (max-width: 1000px) { .ep .ep-grid { grid-template-columns: 1fr; } }
 
 /* messages */
-.ep .ep-chat { display: grid; grid-template-columns: 300px minmax(0, 1fr); height: calc(100vh - 260px); min-height: 460px; }
-.ep .ep-threads { border-right: 1px solid var(--line); overflow-y: auto; }
+.ep .ep-chat { display: grid; grid-template-columns: 300px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); height: calc(100vh - 260px); min-height: 460px; overflow: hidden; }
+.ep .ep-threads { border-right: 1px solid var(--line); overflow-y: auto; min-height: 0; }
 .ep .ep-th { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--line); background: #fff; padding: 11px 14px; }
 .ep .ep-th:hover { background: var(--soft); }
 .ep .ep-th.on { background: var(--priBg); }
@@ -30,10 +30,11 @@
 .ep .ep-th-x b { display: block; color: var(--navy); font-weight: 600; font-size: 13.5px; }
 .ep .ep-th-x .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .ep .ep-th em { font-style: normal; background: var(--red); color: #fff; font-size: 11px; font-weight: 700; border-radius: 99px; padding: 0 7px; }
-.ep .ep-conv { display: flex; flex-direction: column; min-width: 0; }
+.ep .ep-conv { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
+.ep .ep-conv-h, .ep .ep-conv-f { flex-shrink: 0; }
 .ep .ep-conv-h { padding: 12px 16px; border-bottom: 1px solid var(--line); }
 .ep .ep-conv-h b { color: var(--navy); }
-.ep .ep-conv-b { flex: 1; overflow-y: auto; background: var(--soft); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+.ep .ep-conv-b { flex: 1; min-height: 0; overflow-y: auto; background: var(--soft); padding: 16px; display: flex; flex-direction: column; gap: 8px; }
 .ep .ep-cm { display: flex; }
 .ep .ep-cm.me { justify-content: flex-end; }
 .ep .ep-cm .bub { max-width: 75%; background: #fff; border: 1px solid var(--line); border-radius: 14px; border-top-left-radius: 4px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
@@ -75,3 +76,4 @@
 .ep-pday-h .pill { margin-left: auto; }
 .ep-pnote { padding: 8px 14px 0; white-space: pre-wrap; }
 .ep-docs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.ep .ep-in { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 280px; background: #fff; font-family: inherit; }

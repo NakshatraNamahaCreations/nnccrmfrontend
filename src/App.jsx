@@ -2,7 +2,7 @@ import React from "react";
 import { Routes, Route, Navigate } from "react-router-dom";
 
 import LoginScreen from "./LoginScreen/LoginScreen";
-import Dashboard from "./pages/Dashboard";
+import OwnerDashboard from "./pages/OwnerDashboard/OwnerDashboard";   // the old one is pages/Dashboard.jsx
 import Documents from "./Documents/Documents";
 import AllLeads from "./Leads/AllLeads";
 import PipelinePage from "./pages/PipelinePage";
@@ -27,6 +27,7 @@ import CredentialVault  from "./pages/CredentialVault/CredentialVault";
 import IntegrationsPage  from "./pages/Integrations/IntegrationsPage";
 import MonthlyBillingPage from "./pages/ProjectBilling/MonthlyBillingPage";
 import SalesDesk from "./pages/SalesDesk/SalesDesk";
+import LeadTracker from "./pages/LeadTracker/LeadTracker";
 import SeoTeam from "./pages/SeoTeam/SeoTeam";
 import EmployeePortal from "./pages/EmployeePortal/EmployeePortal";
 
@@ -51,7 +52,7 @@ function ProtectedRoute({ children }) {
 
 function PublicRoute({ children }) {
   try {
-    return isAuthed() ? <Navigate to="/owner-desk" replace /> : children;
+    return isAuthed() ? <Navigate to="/dashboard" replace /> : children;
   } catch (error) {
     console.error("PublicRoute error:", error);
     return children;
@@ -91,7 +92,7 @@ export default function App() {
         path="/dashboard"
         element={
           <ProtectedRoute>
-            <Dashboard />
+            <OwnerDashboard />
           </ProtectedRoute>
         }
       />
@@ -125,6 +126,14 @@ export default function App() {
         element={
           <ProtectedRoute>
             <SalesDesk />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/lead-tracker"
+        element={
+          <ProtectedRoute>
+            <LeadTracker />
           </ProtectedRoute>
         }
       />

@@ -26,7 +26,7 @@ const TY = {
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
   poster: "Poster or creative", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
 };
-const TABS = [["people", "Employees"], ["messages", "Messages"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["tasks", "Tasks"], ["settings", "Settings"]];
+const TABS = [["people", "Employees"], ["messages", "Messages"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
 const RANGES = [["today", "Today", 0], ["week", "Last 7 days", -6], ["month", "Last 30 days", -29]];
 
 const h1 = (n) => Math.round((n || 0) * 10) / 10;
@@ -104,6 +104,7 @@ export default function EmployeePortal() {
             {tab === "today" && <Work accounts={A.data || []} today />}
             {tab === "work" && <Work accounts={A.data || []} />}
             {tab === "meetings" && <Meetings />}
+            {tab === "docs" && <SharedDocs />}
             {tab === "tasks" && <Tasks accounts={A.data || []} />}
             {tab === "settings" && <Settings />}
           </>
@@ -567,6 +568,53 @@ function Tasks({ accounts }) {
 }
 
 /* ───────── Meetings ───────── */
+// Documents employees sent each other (for example a tester to a developer), with replies
+function SharedDocs() {
+  const D = useGet("/docs");
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(null);
+  const L = (D.data || []).filter(d => !q || `${d.title} ${d.refName} ${d.fromName} ${d.toName} ${d.text}`.toLowerCase().includes(q.toLowerCase()));
+  const tm = (d) => new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+  const href = (u) => (/^https?:/.test(u) ? u : `${API}${u}`);
+  const all = D.data || [];
+  return (
+    <>
+      <div className="kpis">
+        <div className="kpi"><span className="l">Shared</span><span className="v">{all.length}</span></div>
+        <div className="kpi"><span className="l">Not opened yet</span><span className="v amb">{all.filter(d => !d.seenAt).length}</span></div>
+        <div className="kpi"><span className="l">Marked done</span><span className="v ok">{all.filter(d => d.done).length}</span></div>
+        <div className="kpi"><span className="l">Files</span><span className="v">{all.reduce((a, d) => a + d.files.length, 0)}</span></div>
+      </div>
+      <div className="filters"><input type="search" className="ep-in" placeholder="Search title, project or person" value={q} onChange={e => setQ(e.target.value)} aria-label="Search documents" /></div>
+      <div className="card"><div className="tw"><table>
+        <thead><tr><th>Document</th><th>From</th><th>To</th><th>Project</th><th>Sent</th><th>Status</th><th /></tr></thead>
+        <tbody>{D.loading ? <tr><td colSpan={7}><div className="empty">Loading…</div></td></tr> : D.err ? <tr><td colSpan={7}><div className="empty err">{D.err}</div></td></tr> : L.length ? L.map(d => (
+          <tr key={d._id}>
+            <td><b>{d.title}</b><span className="sub">{d.files.length} file{d.files.length === 1 ? "" : "s"}{d.replies.length ? ` · ${d.replies.length} repl${d.replies.length === 1 ? "y" : "ies"}` : ""}</span></td>
+            <td>{d.fromName}</td><td>{d.toName}</td><td>{d.refName || "-"}</td><td>{tm(d.createdAt)}</td>
+            <td>{d.done ? <span className="pill p-ok">Done</span> : d.seenAt ? <span className="pill p-blue">Seen</span> : <span className="pill p-amb">Not opened</span>}</td>
+            <td className="r"><button type="button" className="btn sm" onClick={() => setOpen(d)}>View</button></td>
+          </tr>
+        )) : <tr><td colSpan={7}><div className="empty">Nothing shared yet. Documents employees send each other from the portal appear here.</div></td></tr>}</tbody>
+      </table></div></div>
+      {open && (
+        <Modal title={open.title} onClose={() => setOpen(null)} wide>
+          <p className="sub">{open.fromName} to {open.toName}{open.refName ? ` · ${open.refName}` : ""} · {tm(open.createdAt)}{open.seenAt ? ` · seen ${tm(open.seenAt)}` : " · not opened yet"}</p>
+          {open.text && <pre className="ep-mom">{open.text}</pre>}
+          {open.files.length > 0 && <div className="ep-docs">{open.files.map(f => <a key={f.url} href={href(f.url)} target="_blank" rel="noopener noreferrer" className="btn sm">{f.name}</a>)}</div>}
+          {open.replies.map((r, i) => (
+            <div key={i} style={{ borderTop: "1px solid var(--line)", marginTop: 10, paddingTop: 10 }}>
+              <b>{r.name}</b> <span className="sub" style={{ display: "inline" }}>{tm(r.at)}</span>
+              {r.text && <pre className="ep-mom">{r.text}</pre>}
+              {r.files?.length > 0 && <div className="ep-docs">{r.files.map(f => <a key={f.url} href={href(f.url)} target="_blank" rel="noopener noreferrer" className="btn sm">{f.name}</a>)}</div>}
+            </div>
+          ))}
+        </Modal>
+      )}
+    </>
+  );
+}
+
 function Meetings() {
   const M = useGet("/meetings");
   const [open, setOpen] = useState(null);

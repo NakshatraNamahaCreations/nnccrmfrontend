@@ -21,7 +21,6 @@ import {
   X,
   Grid3X3,
   ReceiptText,
-  Briefcase,
   ShieldCheck,
   Plug,
   Repeat,
@@ -55,17 +54,10 @@ export default function Sidebar() {
       try {
         const token = localStorage.getItem("nnc_token");
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        // Unseen (new, not-yet-viewed) enquiries across BOTH sites — matches the
-        // alert badges on the Enquiries tabs.
-        const [nncRes, digiRes] = await Promise.all([
-          fetch(`${API_BASE}/api/enquiries/stats?site=nnc`,        { headers }),
-          fetch(`${API_BASE}/api/enquiries/stats?site=nncdigital`, { headers }),
-        ]);
-        const [nncJson, digiJson] = await Promise.all([nncRes.json(), digiRes.json()]);
-        const total =
-          (nncJson?.success  ? (nncJson.data.unseen  || 0) : 0) +
-          (digiJson?.success ? (digiJson.data.unseen || 0) : 0);
-        setNewEnquiryCount(total);
+        // New leads (both websites and the CRM) from the last 14 days that nobody has contacted yet:
+        // the same number as All Leads → Today → "Not contacted yet"
+        const j = await (await fetch(`${API_BASE}/api/enquiries/stats`, { headers })).json();
+        setNewEnquiryCount(j?.success ? (j.data.fresh || 0) : 0);
       } catch { /* silent */ }
     };
     fetchCount();
@@ -121,13 +113,13 @@ export default function Sidebar() {
     {
       title: "Overview",
       items: [
-        { label: "Owner's Desk",      path: "/owner-desk",  moduleKey: "owner-desk",        icon: <Briefcase size={15} /> },
-        { label: "All Leads",         path: "/sales-desk",  moduleKey: "all-leads",         icon: <Headset size={15} />, badge: newEnquiryCount || null },
+        // Owner's Desk (/owner-desk) and the old All Leads (/sales-desk) are hidden; both pages still open by their address
+        { label: "Dashboard",     path: "/dashboard",   moduleKey: "dashboard",   icon: <LayoutDashboard size={15} /> },
+        { label: "All Leads",         path: "/lead-tracker", moduleKey: "all-leads",        icon: <Headset size={15} />, badge: newEnquiryCount || null },
         { label: "SEO & Ads Team",    path: "/seo-team",    moduleKey: "seo-team",          icon: <SearchCheck size={15} /> },
         { label: "Employee Portal",   path: "/employee-portal", moduleKey: "employee-portal", icon: <UserCheck size={15} /> },
         { label: "NNC Credentials", path: "/credentials", moduleKey: "credentials-vault", icon: <ShieldCheck size={15} /> },
         { label: "Today's Plan",  path: "/todays-plan", moduleKey: "todays-plan", icon: <ClipboardList size={15} /> },
-        { label: "Dashboard",     path: "/dashboard",   moduleKey: "dashboard",   icon: <LayoutDashboard size={15} /> },
       ],
     },
     {

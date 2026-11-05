@@ -3,6 +3,7 @@ import { MessageSquareText, X, ArrowLeft, Send, Hash } from "lucide-react";
 import { billingApi } from "../../pages/ProjectBilling/billingMeta";
 import { toast } from "../../utils/toast";
 import { useRise, useNewMessage } from "../../utils/ding";
+import { useLive, every } from "../../utils/live";
 import "./TeamChat.css";
 
 // Floating team chat in the CRM: the admin joins the Employee Portal group channels
@@ -35,26 +36,33 @@ export default function TeamChat() {
     let live = true;
     const load = () => tapi("/channels").then(j => { if (live) { setChans(j.data); setUnread(j.unread); } }, (e) => { if (live && e.status === 403) setOff(true); });
     load();
-    const t = setInterval(load, open ? 3000 : 8000);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(open ? 3000 : 8000, load);
+    return () => { live = false; stop(); };
   }, [open, tick, off]);
   useEffect(() => {
     if (!cur) return undefined;
     let live = true;
     const load = () => tapi(`/messages?channel=${encodeURIComponent(cur.id)}`).then(j => live && setMsgs(j.data), () => {});
     load();
-    const t = setInterval(load, 2000);
-    return () => { live = false; clearInterval(t); };
+    const stop = every(2000, load);
+    return () => { live = false; stop(); };
   }, [cur, tick]);
-  useEffect(() => { end.current?.scrollIntoView({ block: "end" }); }, [msgs.length, cur]);
+  // a new message in a group: reload straight away
+  useLive("team", () => setTick(x => x + 1));
+  useEffect(() => { const b = end.current?.parentElement; if (b) b.scrollTop = b.scrollHeight; }, [msgs.length, cur]);
 
   if (off) return null;
+  // The message shows straight away; it is swapped for the saved one when the server answers
   const send = async (e) => {
     e.preventDefault();
-    if (!text.trim() || !cur) return;
-    setBusy(true);
-    try { await tapi("/messages", { method: "POST", body: { channel: cur.id, text: text.trim() } }); setText(""); setTick(x => x + 1); }
-    catch (ex) { toast.error(ex.message); }
+    const t = text.trim();
+    if (!t || !cur) return;
+    const tmp = { _id: `tmp-${Date.now()}`, mine: true, who: "me", role: "admin", text: t, createdAt: new Date().toISOString(), pending: true };
+    setMsgs(L => [...L, tmp]); setText(""); setBusy(true);
+    try {
+      const j = await tapi("/messages", { method: "POST", body: { channel: cur.id, text: t } });
+      setMsgs(L => L.map(m => (m._id === tmp._id ? j.data : m)));
+    } catch (ex) { setMsgs(L => L.filter(m => m._id !== tmp._id)); setText(t); toast.error(ex.message); }
     finally { setBusy(false); }
   };
 
@@ -90,7 +98,7 @@ export default function TeamChat() {
                       <div className="nnc-tc-bub">
                         {first && !m.mine && <b className="nnc-tc-who">{m.name} <span>{R[0]}</span></b>}
                         <span className="nnc-tc-txt">{m.text}</span>
-                        <small>{tm(m.createdAt)}</small>
+                        <small>{m.pending ? "sending…" : tm(m.createdAt)}</small>
                       </div>
                     </div>
                   );

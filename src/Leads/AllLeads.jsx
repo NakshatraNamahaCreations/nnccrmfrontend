@@ -160,10 +160,16 @@ export default function AllLeads() {
     try {
       setLoading(true);
       setErr("");
-      const res  = await fetch(`${API_BASE}/api/leads?${queryParams}`, { headers: authHeaders() });
-      const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error(json?.message || "Failed to fetch leads");
-      setRows((json.data || []).map(x => ({
+      // The server sends 50 by default; ask for every page so all projects show (the table pages them here)
+      const all = [];
+      for (let p = 1; p <= 50; p++) {
+        const res  = await fetch(`${API_BASE}/api/leads?${queryParams}&limit=200&page=${p}`, { headers: authHeaders() });
+        const json = await res.json();
+        if (!res.ok || !json?.success) throw new Error(json?.message || "Failed to fetch leads");
+        all.push(...(json.data || []));
+        if (p >= (json.pages || 1)) break;
+      }
+      setRows(all.map(x => ({
         id:              x._id,
         name:            x.name            || "—",
         phone:           x.phone           || "—",
