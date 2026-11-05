@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Search, RefreshCw, Plus } from "lucide-react";
+import { Search, RefreshCw, Plus, ChevronDown, ChevronRight } from "lucide-react";
+import Pager from "../LeadTracker/Pager";
 import { toast } from "../../utils/toast";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import IntegrationFormModal from "./IntegrationFormModal";
@@ -7,6 +8,9 @@ import { IntegrationCard } from "./ProjectIntegrations";
 import { fetchProjects } from "../ProjectBilling/billingMeta";
 import { api, canEditIntegrations, CATEGORIES, CATEGORY_META, STATUS_META, renewalState } from "./integrationMeta";
 import "./Integrations.css";
+
+// The business is what people recognise; the client's name is shown under it
+const bizName = (l) => String(l?.business || l?.company || l?.name || "Project").trim();
 
 /** Sidebar page: every project's third-party integrations, grouped by project */
 export default function IntegrationsPage() {
@@ -20,6 +24,9 @@ export default function IntegrationsPage() {
   const [projects, setProjects] = useState([]);
   const [cardFilter, setCardFilter] = useState(""); // "" | "live" | "issue" | "renewal"
   const [modal, setModal]       = useState(null);
+  const [open, setOpen]         = useState({});   // projects opened to show their credentials
+  const [page, setPage]         = useState(0);
+  const [per, setPer]           = useState(10);
   const canEdit = canEditIntegrations();
 
   const load = useCallback(async () => {
@@ -79,8 +86,12 @@ export default function IntegrationsPage() {
       if (!map.has(id)) map.set(id, { lead: i.lead, items: [] });
       map.get(id).items.push(i);
     }
-    return [...map.values()].sort((a, b) => a.lead.name.localeCompare(b.lead.name));
+    return [...map.values()].sort((a, b) => bizName(a.lead).localeCompare(bizName(b.lead)));
   }, [scoped, search, category, status, cardFilter]);
+  // a search, a filter or one project picked: show the credentials straight away
+  const autoOpen = !!(search.trim() || category || status || cardFilter || project);
+  const pages = Math.max(1, Math.ceil(groups.length / per)), cur = Math.min(page, pages - 1);
+  const pageGroups = groups.slice(cur * per, cur * per + per);
 
   const remove = async (item) => {
     if (!window.confirm(`Delete ${item.service} from ${item.lead?.name}? Its stored keys will be deleted too.`)) return;
@@ -148,15 +159,15 @@ export default function IntegrationsPage() {
           <Search size={14} />
           <input
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(0); }}
             placeholder="Search project, service, username…"
           />
         </div>
-        <select className="intg-proj-select" value={project} onChange={e => setProject(e.target.value)}>
+        <select className="intg-proj-select" value={project} onChange={e => { setProject(e.target.value); setPage(0); }}>
           <option value="">All projects</option>
           {projectOptions.map(p => (
             <option key={p._id} value={p._id}>
-              {p.name}{p.business ? ` — ${p.business}` : ""} ({countBy[p._id] || 0})
+              {p.business ? `${p.business} — ${p.name}` : p.name} ({countBy[p._id] || 0})
             </option>
           ))}
         </select>
@@ -182,25 +193,36 @@ export default function IntegrationsPage() {
         </div>
       )}
 
-      {!loading && !error && groups.map(g => (
-        <section key={g.lead._id} className="intg-group">
-          <div className="intg-group-head">
-            <div className="intg-group-avatar">{(g.lead.name || "?").slice(0, 2).toUpperCase()}</div>
-            <div className="intg-group-main">
-              <div className="intg-group-name">{g.lead.name}</div>
-              <div className="intg-card-sub">
-                {[g.lead.business || g.lead.company, g.lead.phone, g.lead.projectStage].filter(Boolean).join(" · ")}
+      {!loading && !error && pageGroups.map(g => {
+        const isOpen = open[g.lead._id] ?? autoOpen;
+        const biz = bizName(g.lead);
+        return (
+          <section key={g.lead._id} className={`intg-group${isOpen ? "" : " closed"}`}>
+            <button type="button" className="intg-group-head intg-group-toggle" aria-expanded={isOpen}
+              onClick={() => setOpen(o => ({ ...o, [g.lead._id]: !isOpen }))}>
+              <div className="intg-group-avatar">{biz.slice(0, 2).toUpperCase()}</div>
+              <div className="intg-group-main">
+                <div className="intg-group-name">{biz}</div>
+                <div className="intg-card-sub">
+                  {[biz !== g.lead.name ? g.lead.name : "", g.lead.phone, g.lead.projectStage].filter(Boolean).join(" · ")}
+                </div>
               </div>
-            </div>
-            <span className="intg-group-count">{g.items.length} integration{g.items.length === 1 ? "" : "s"}</span>
-          </div>
-          <div className="intg-group-grid">
-            {g.items.map(item => (
-              <IntegrationCard key={item._id} item={item} canEdit={canEdit} onEdit={setModal} onDelete={remove} />
-            ))}
-          </div>
-        </section>
-      ))}
+              <span className="intg-group-count">{g.items.length} credential{g.items.length === 1 ? "" : "s"}</span>
+              {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            </button>
+            {isOpen && (
+              <div className="intg-group-grid">
+                {g.items.map(item => (
+                  <IntegrationCard key={item._id} item={item} canEdit={canEdit} onEdit={setModal} onDelete={remove} />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
+      {!loading && !error && groups.length > 10 && (
+        <Pager total={groups.length} page={cur} per={per} onPage={setPage} onPer={setPer} sizes={[10, 25, 50]} label="projects" />
+      )}
 
       {modal && (
         <IntegrationFormModal

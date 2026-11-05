@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
+import "./Pager.css";
 
 // Page numbers for long lists: first, previous, numbered pages, next, last, and rows per page
 function nums(cur, pages) {

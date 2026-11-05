@@ -1,0 +1,11 @@
+/* Page numbers (All Leads, Credential Vault, Employee Portal) */
+.lt-pager { display: flex; gap: 6px; align-items: center; justify-content: space-between; padding: 10px 14px; font-size: 13px; color: var(--mut, #64748b); flex-wrap: wrap; }
+.lt-pager b { color: var(--navy, #0f172a); font-weight: 600; }
+.lt-pages { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; }
+.lt-pages select { margin-right: 6px; border: 1px solid var(--line, #e2e8f0); border-radius: 9px; padding: 7px 10px; background: #fff; font-size: 13px; }
+.lt-pg { min-width: 32px; height: 32px; border: 1px solid var(--line, #e2e8f0); background: #fff; border-radius: 8px; color: var(--navy, #0f172a); font-weight: 500; font-size: 13px; display: inline-grid; place-items: center; padding: 0 8px; cursor: pointer; }
+.lt-pg:hover:not(:disabled) { border-color: #BFD0F5; }
+.lt-pg.on { background: var(--navy, #0f172a); border-color: var(--navy, #0f172a); color: #fff; }
+.lt-pg:disabled { opacity: .4; cursor: default; }
+.lt-gap { padding: 0 4px; color: var(--mut, #64748b); }
+.lt-sr { position: absolute; left: -9999px; }

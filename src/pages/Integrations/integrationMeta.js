@@ -47,7 +47,8 @@ export const CATEGORY_META = {
   "Database":         { icon: "🗄️", services: ["MongoDB Atlas", "MySQL", "PostgreSQL", "Firebase Firestore"],    secrets: ["Connection String", "Password"] },
   "Analytics / Ads":  { icon: "📊", services: ["Google Analytics", "Search Console", "Meta Pixel", "Google Ads", "Google Tag Manager"], secrets: ["Measurement / Pixel ID"] },
   "Shipping":         { icon: "📦", services: ["Shiprocket", "Delhivery", "Blue Dart"],                          secrets: ["API Email", "API Password / Token"] },
-  "App Store":        { icon: "📲", services: ["Google Play Console", "Apple App Store Connect"],               secrets: ["Password"] },
+  "Play Store":       { icon: "▶️", services: ["Google Play Console"],                                          secrets: ["Password", "Service account JSON key", "Upload key / Keystore password"] },
+  "App Store":        { icon: "📲", services: ["Apple App Store Connect", "Google Play Console"],               secrets: ["Password"] },
   "Other":            { icon: "🔌", services: [],                                                                secrets: ["API Key"] },
 };
 export const CATEGORIES = Object.keys(CATEGORY_META);

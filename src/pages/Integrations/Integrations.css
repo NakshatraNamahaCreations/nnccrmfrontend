@@ -185,3 +185,9 @@
   .intg-group-grid { grid-template-columns: 1fr; }
 }
 .intg-filters select.intg-proj-select { max-width: 280px; }
+
+/* project rows open on click */
+.intg-group-toggle { width: 100%; background: none; border: 0; padding: 0; font: inherit; text-align: left; cursor: pointer; color: inherit; }
+.intg-group-toggle > svg { color: #64748b; flex: none; }
+.intg-group.closed { padding-bottom: 14px; }
+.intg-group:not(.closed) .intg-group-head { margin-bottom: 14px; }

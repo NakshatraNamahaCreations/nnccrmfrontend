@@ -86,3 +86,9 @@
 .ep-rc.on { background: var(--priBg, #EFF4FF); color: var(--navy); font-weight: 500; }
 .ep-rc em { font-style: normal; font-size: 10.5px; background: var(--navy, #0F172A); color: #fff; border-radius: 8px; padding: 0 6px; margin-left: auto; }
 .ep-rg .link { align-self: flex-start; border: 0; background: none; color: var(--pri, #2563EB); font-size: 12px; padding: 2px 8px; cursor: pointer; }
+
+/* meetings filters */
+.ep-mfil { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ep-mfil input[type="search"] { flex: 1 1 240px; min-width: 0; }
+.ep-mfil input, .ep-mfil select { border: 1px solid #e2e8f0; border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 13px; background: #fff; }
+.ep-mfil label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: #64748b; }

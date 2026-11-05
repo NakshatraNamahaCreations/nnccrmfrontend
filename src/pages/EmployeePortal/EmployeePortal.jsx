@@ -8,6 +8,7 @@ import { T, fd, fdw, initials, waPhone, copy } from "../SeoTeam/seoUtil";
 import "../SeoTeam/SeoTeam.css";
 import "./EmployeePortal.css";
 import PortalChat from "./PortalChat";
+import Pager from "../LeadTracker/Pager";
 import { markSeen, fetchPortalCounts } from "../../utils/portalSeen";
 
 // Approvals and the work employees log in the NNC Employee Portal (/api/portal/admin)
@@ -22,6 +23,7 @@ const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seo
 const PROJECT_ROLES = ["app", "web", "back", "full", "ux", "test", "other"];   // put on projects
 const SEO_ROLES = ["seo", "seox", "ads", "gfx"];                             // put on SEO clients
 const DEPTS = ["Development", "Design", "Testing", "Digital Marketing", "Accounts"];
+const BRANCHES = ["Bangalore", "Mysore", "Mumbai"];
 const TY = {
   backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign change", negative: "Negative keywords", newad: "New ad or campaign",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
@@ -138,7 +140,11 @@ function People({ A }) {
   const [ask, setAsk] = useState(null);
   const [tmp, setTmp] = useState(null);
   const L = A.data || [];
-  const shown = L.filter(a => f === "all" || a.status === f);
+  const all = L.filter(a => f === "all" || a.status === f);
+  const [page, setPage] = useState(0);
+  const [per, setPer] = useState(10);
+  const pages = Math.max(1, Math.ceil(all.length / per)), cur = Math.min(page, pages - 1);
+  const shown = all.slice(cur * per, cur * per + per);
   const upd = async (a, body, ok) => {
     try { await papi(`/accounts/${a.id}`, { method: "PUT", body }); toast.success(ok); A.reload(); } catch (ex) { toast.error(ex.message); }
   };
@@ -171,16 +177,17 @@ function People({ A }) {
         <div className="kpi"><span className="l">Disabled</span><span className="v">{L.filter(a => a.status === "disabled").length}</span></div>
       </div>
       <div className="filters">{[["all", "All"], ["pending", "Waiting for approval"], ["active", "Active"], ["disabled", "Disabled"]].map(([k, t]) => (
-        <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => setF(k)}>{t}</button>
+        <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => { setF(k); setPage(0); }}>{t}</button>
       ))}<span className="sp" /><button type="button" className="btn pri" onClick={() => setAdding(true)}><UserPlus size={14} /> Add employee</button></div>
       <div className="card"><div className="tw"><table>
-        <thead><tr><th>Employee</th><th>Role</th><th>Contact</th><th>Works on</th><th>Last sign in</th><th>Status</th><th /></tr></thead>
+        <thead><tr><th>Employee</th><th>Role</th><th>Contact</th><th>Branch</th><th>Works on</th><th>Last sign in</th><th>Status</th><th /></tr></thead>
         <tbody>
-          {A.loading ? <tr><td colSpan={7}><div className="empty">Loading…</div></td></tr> : shown.length ? shown.map(a => (
+          {A.loading ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : shown.length ? shown.map(a => (
             <tr key={a.id}>
               <td><div className="ep-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">joined {fd(dayOf(a.created))}</span></span></div></td>
               <td><Role a={a} /></td>
               <td>{a.email}<span className="sub">{a.phone}</span></td>
+              <td>{a.branch || "-"}</td>
               <td className="ep-works">{a.orphan ? <span className="pill p-red">Removed from the CRM team</span>
                 : a.role === "acc" ? <span className="sub">All projects (accounts)</span>
                 : a.works.length ? <button type="button" className="btn sm" onClick={() => setWorksFor(a)}><FolderKanban size={13} /> {a.works.length} {a.works[0].kind === "client" ? "client" : "project"}{a.works.length > 1 ? "s" : ""} · View</button>
@@ -200,9 +207,11 @@ function People({ A }) {
                 <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${a.name}`} onClick={() => setAsk({ kind: "delete", a })}><Trash2 size={13} /></button>
               </td>
             </tr>
-          )) : <tr><td colSpan={7}><div className="empty">{L.length ? "Nobody in this list." : "No employees yet. When someone creates an account in the Employee Portal, they appear here to approve."}</div></td></tr>}
+          )) : <tr><td colSpan={8}><div className="empty">{L.length ? "Nobody in this list." : "No employees yet. When someone creates an account in the Employee Portal, they appear here to approve."}</div></td></tr>}
         </tbody>
-      </table></div></div>
+      </table></div>
+        {all.length > 10 && <Pager total={all.length} page={cur} per={per} onPage={setPage} onPer={setPer} sizes={[10, 25, 50]} label="employees" />}
+      </div>
       <p className="hint">Add employees here, or approve the ones who sign up in the portal. Each employee is listed once. Developers, designers and testers are put on projects with
         the projects button; Digital Marketing staff get their clients in SEO & Ads Team. They see only the projects or clients you assign them.</p>
 
@@ -275,7 +284,7 @@ function ProjectChecks({ list, value, onChange }) {
 // Add an employee (active straight away, with a password) or edit one's details
 function EmployeeForm({ a, onClose, onDone }) {
   const isNew = !a;
-  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", password: "" });
+  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", branch: a?.branch || "Bangalore", password: "" });
   const [roles, setRoles] = useState(() => (a ? rolesOf(a) : ["full"]));   // the first one is the main role
   const main = roles[0] || "";
   const togRole = (k) => setRoles(L => (L.includes(k) ? L.filter(x => x !== k) : [...L, k]));
@@ -296,7 +305,7 @@ function EmployeeForm({ a, onClose, onDone }) {
         toast.success(`${d.name} added. They can sign in to the Employee Portal now`);
         onDone({ a: { name: d.name, email: d.email, phone: d.phone }, pw: d.password, set: true });
       } else {
-        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, role: main, roles: roles.slice(1) } });
+        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, branch: d.branch, role: main, roles: roles.slice(1) } });
         toast.success("Employee updated"); onDone();
       }
     } catch (ex) { toast.error(ex.message); setBusy(false); }
@@ -311,6 +320,7 @@ function EmployeeForm({ a, onClose, onDone }) {
           </select></label>
           <label className="f"><span className="flabel">Email (their portal login)</span><input type="email" required disabled={!isNew} value={d.email} onChange={set("email")} /></label>
           <label className="f"><span className="flabel">Mobile number</span><input type="tel" value={d.phone} onChange={set("phone")} /></label>
+          <label className="f"><span className="flabel">Branch</span><select value={d.branch} onChange={set("branch")}>{BRANCHES.map(b => <option key={b}>{b}</option>)}</select></label>
         </div>
         <div className="f"><span className="flabel">All their roles ({roles.length}) · tick every kind of work they do</span>
           <div className="ep-roles">{DEPTS.map(g => (
@@ -654,8 +664,31 @@ function SharedDocs() {
 function Meetings() {
   const M = useGet("/meetings");
   const [open, setOpen] = useState(null);
-  const L = M.data || [];
+  const all = M.data || [];
   const sent = (m) => m.sentWa || m.sentMail;
+  const [fl, setFl] = useState({ q: "", who: "", mom: "", from: "", to: "" });
+  const [page, setPage] = useState(0);
+  const [per, setPer] = useState(10);
+  const setF = (k) => (e) => { setFl(s => ({ ...s, [k]: e.target.value })); setPage(0); };
+  const people = [...new Map(all.filter(m => m.account?._id).map(m => [m.account._id, m.account.name])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const momOf = (m) => (!m.momTxt ? "notes" : sent(m) ? "sent" : "unsent");
+  const L = all.filter(m => {
+    const d = dayOf(m.date);
+    if (fl.who && m.account?._id !== fl.who) return false;
+    if (fl.mom && momOf(m) !== fl.mom) return false;
+    if (fl.from && d < fl.from) return false;
+    if (fl.to && d > fl.to) return false;
+    const q = fl.q.trim().toLowerCase();
+    return !q || [m.title, m.refName, m.account?.name, m.mode].some(v => String(v || "").toLowerCase().includes(q));
+  });
+  const pages = Math.max(1, Math.ceil(L.length / per)), cur = Math.min(page, pages - 1);
+  const shown = L.slice(cur * per, cur * per + per);
+  const filtered = !!(fl.q || fl.who || fl.mom || fl.from || fl.to);
+  const del = async (m) => {
+    if (!window.confirm(`Delete the meeting "${m.title}" by ${m.account?.name || "this employee"}? Its notes, MOM and timesheet entry are deleted too.`)) return;
+    try { await papi(`/meetings/${m._id}`, { method: "DELETE" }); toast.success("Meeting deleted"); setOpen(null); M.reload(); }
+    catch (ex) { toast.error(ex.message); }
+  };
   // The list leaves photos out to stay fast; load them when a meeting is opened
   const view = (m) => {
     setOpen(m);
@@ -669,22 +702,34 @@ function Meetings() {
         <div className="kpi"><span className="l">MOM written, not sent</span><span className="v">{L.filter(m => m.momTxt && !sent(m)).length}</span></div>
         <div className="kpi"><span className="l">Notes only</span><span className="v amb">{L.filter(m => !m.momTxt).length}</span></div>
       </div>
+      <div className="filters ep-mfil">
+        <input type="search" placeholder="Search meeting, client or employee" value={fl.q} onChange={setF("q")} aria-label="Search meetings" />
+        <select value={fl.who} onChange={setF("who")} aria-label="Employee"><option value="">All employees</option>{people.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
+        <select value={fl.mom} onChange={setF("mom")} aria-label="MOM"><option value="">Any MOM status</option><option value="sent">MOM sent</option><option value="unsent">MOM written, not sent</option><option value="notes">Notes only</option></select>
+        <label>From <input type="date" value={fl.from} max={fl.to || undefined} onChange={setF("from")} /></label>
+        <label>To <input type="date" value={fl.to} min={fl.from || undefined} onChange={setF("to")} /></label>
+        {filtered && <button type="button" className="btn sm" onClick={() => { setFl({ q: "", who: "", mom: "", from: "", to: "" }); setPage(0); }}>Clear</button>}
+      </div>
       <div className="card"><div className="tw"><table>
         <thead><tr><th>Meeting</th><th>Client or project</th><th>By</th><th>When</th><th>MOM</th><th /></tr></thead>
-        <tbody>{M.loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : M.err ? <tr><td colSpan={6}><div className="empty err">{M.err}</div></td></tr> : L.length ? L.map(m => (
+        <tbody>{M.loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : M.err ? <tr><td colSpan={6}><div className="empty err">{M.err}</div></td></tr> : shown.length ? shown.map(m => (
           <tr key={m._id}>
             <td><b>{m.title}</b><span className="sub">{m.mode}</span></td>
             <td>{m.refName || "Internal"}</td>
             <td>{m.account?.name || "-"}<span className="sub">{ROLES[m.account?.role]?.[0]}</span></td>
             <td>{fdw(m.date)}{m.time ? `, ${m.time}` : ""}</td>
             <td>{!m.momTxt ? <span className="pill p-amb">Notes only</span> : sent(m) ? <span className="pill p-ok">Sent{m.sentWa ? " · WhatsApp" : ""}{m.sentMail ? " · Email" : ""}</span> : <span className="pill p-blue">Not sent</span>}</td>
-            <td className="r"><button type="button" className="btn sm" onClick={() => view(m)}>View</button></td>
+            <td className="r" style={{ whiteSpace: "nowrap" }}><button type="button" className="btn sm" onClick={() => view(m)}>View</button>{" "}
+              <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${m.title}`} onClick={() => del(m)}><Trash2 size={13} /></button></td>
           </tr>
-        )) : <tr><td colSpan={6}><div className="empty">No meetings yet. Meetings logged by employees appear here.</div></td></tr>}</tbody>
-      </table></div></div>
+        )) : <tr><td colSpan={6}><div className="empty">{all.length ? "No meetings match these filters." : "No meetings yet. Meetings logged by employees appear here."}</div></td></tr>}</tbody>
+      </table></div>
+        {L.length > 10 && <Pager total={L.length} page={cur} per={per} onPage={setPage} onPer={setPer} sizes={[10, 25, 50]} label="meetings" />}
+      </div>
       {open && (
         <Modal title={open.title} onClose={() => setOpen(null)} wide>
-          <p className="sub">{[open.refName || "Internal", fdw(open.date), open.account?.name].filter(Boolean).join(" · ")}</p>
+          <p className="sub">{[open.refName || "Internal", fdw(open.date), open.account?.name].filter(Boolean).join(" · ")}
+            <button type="button" className="btn sm late" style={{ float: "right" }} onClick={() => del(open)}><Trash2 size={13} /> Delete</button></p>
           <pre className="ep-mom">{open.momTxt || open.notes}</pre>
           {open.files?.length > 0 && <div className="ep-docs">{open.files.map(f => (
             <a key={f.url} href={/^https?:/.test(f.url) ? f.url : `${API}${f.url}`} target="_blank" rel="noopener noreferrer" className="btn sm">{f.name}</a>

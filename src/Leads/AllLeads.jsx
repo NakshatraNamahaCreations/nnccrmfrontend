@@ -3,7 +3,7 @@ import { useSearchParams } from "react-router-dom";
 import { toast } from "../utils/toast";
 import Sidebar from "../components/Sidebar/Sidebar";
 import LeadDrawer from "../Leads/LeadDrawer";
-import { Trash2, Download, Eye, Pencil, X, Search, CalendarPlus, Plus } from "lucide-react";
+import { Trash2, Download, Pencil, X, Search, Plus } from "lucide-react";
 import { ShimmerLeadList, BtnSpinner } from "../components/ui/Shimmer";
 import GstPicker from "./GstPicker";
 import { PROJECT_STAGES, PROJECT_STAGE_COLOR, projectStageLabel, projectStagePatch } from "./projectStages";
@@ -100,7 +100,6 @@ export default function AllLeads() {
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [deletingId, setDeletingId]   = useState(null);
   const [exporting, setExporting]     = useState(false);
-  const [planningId, setPlanningId]   = useState(null);
   const [editOpen, setEditOpen]       = useState(false);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving]   = useState(false);
@@ -230,22 +229,6 @@ export default function AllLeads() {
 
   // Reset to page 1 when filters change
   useEffect(() => { setPage(1); }, [queryParams]);
-
-  const addLeadToTodayPlan = async (e, row) => {
-    try {
-      e.stopPropagation();
-      setPlanningId(row.id);
-      const res  = await fetch(`${API_BASE}/api/today-plan/from-lead/${row.id}`, {
-        method: "POST",
-        headers: authHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ taskType: "new_call", priority: row.priority === "Hot" ? "urgent" : "medium", section: "call_immediately", dueLabel: "ASAP", subtitle: row.business, plannedDate: new Date().toISOString() }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json?.success) throw new Error(json?.message || "Failed");
-      toast.success(json?.message || "Added to today's plan");
-    } catch (e) { toast.error(e?.message || "Failed"); }
-    finally { setPlanningId(null); }
-  };
 
   const handleDeleteLead = async (e, id) => {
     try {
@@ -491,6 +474,7 @@ export default function AllLeads() {
                       <th>Date</th>
                       <th>Business Name</th>
                       <th>Client Name</th>
+                      <th>Branch</th>
                       <th>Project Stage</th>
                       <th>Date Onboarded</th>
                       <th>Rep</th>
@@ -513,6 +497,7 @@ export default function AllLeads() {
                             <div className="alRowName">{r.name}</div>
                             <div className="alRowPhone">{r.phone}</div>
                           </td>
+                          <td style={{ fontSize: 12, color: "#374151" }}>{r.branch}</td>
                           <td>
                             {(() => { const sc = PROJECT_STAGE_COLOR[r.projectStage] || PROJECT_STAGE_COLOR[""]; return (
                               <span className="alRowStage" style={{ background: sc.bg, color: sc.color }}>
@@ -528,9 +513,7 @@ export default function AllLeads() {
                           </td>
                           <td onClick={e => e.stopPropagation()}>
                             <div className="alRowActions">
-                              <button type="button" className="alAct view" title="View" onClick={e => { e.stopPropagation(); setSelectedId(r.id); setDrawerOpen(true); }}><Eye size={14}/></button>
                               <button type="button" className="alAct edit" title="Edit" onClick={e => handleEditLead(e, r.id)}><Pencil size={14}/></button>
-                              <button type="button" className="alAct plan" title="Add to Today's Plan" onClick={e => addLeadToTodayPlan(e, r)} disabled={planningId === r.id}><CalendarPlus size={14}/></button>
                               <button type="button" className="alAct del" title="Delete" onClick={e => handleDeleteLead(e, r.id)} disabled={deletingId === r.id}><Trash2 size={14}/></button>
                             </div>
                           </td>
