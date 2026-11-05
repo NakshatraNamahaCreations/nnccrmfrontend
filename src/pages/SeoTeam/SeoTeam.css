@@ -170,3 +170,15 @@
   #seo-rep table { min-width: 0 !important; }
   #seo-rep .tw { overflow: visible; }
 }
+
+/* who does the work */
+.sd-own { max-width: 340px; font-size: 12px; line-height: 1.35; }
+
+/* team on a client */
+.tpick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tpick select { border: 1px dashed #CBD5E1; border-radius: 20px; padding: 4px 10px; font-size: 12.5px; background: #fff; color: var(--blue, #2563EB); cursor: pointer; }
+.tpick.sm select { padding: 3px 8px; }
+.tchip { display: inline-flex; align-items: center; gap: 4px; background: #EFF4FF; color: #1E3A8A; border-radius: 20px; padding: 3px 4px 3px 10px; font-size: 12.5px; font-weight: 500; }
+.tchip button { border: 0; background: transparent; color: #64748B; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
+.span3 { grid-column: span 3; }
+@media (max-width: 800px) { .span3 { grid-column: auto; } }

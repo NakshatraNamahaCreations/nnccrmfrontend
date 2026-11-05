@@ -77,3 +77,12 @@
 .ep-pnote { padding: 8px 14px 0; white-space: pre-wrap; }
 .ep-docs { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
 .ep .ep-in { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-width: 280px; background: #fff; font-family: inherit; }
+
+/* roles picker */
+.ep .ep-roles, .ep-roles { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.ep-rg { display: flex; flex-direction: column; gap: 4px; }
+.ep-rg > b { font-size: 12px; color: var(--navy); font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.ep-rc { display: flex; align-items: center; gap: 8px; font-size: 13.5px; padding: 4px 8px; border-radius: 8px; cursor: pointer; }
+.ep-rc.on { background: var(--priBg, #EFF4FF); color: var(--navy); font-weight: 500; }
+.ep-rc em { font-style: normal; font-size: 10.5px; background: var(--navy, #0F172A); color: #fff; border-radius: 8px; padding: 0 6px; margin-left: auto; }
+.ep-rg .link { align-self: flex-start; border: 0; background: none; color: var(--pri, #2563EB); font-size: 12px; padding: 2px 8px; cursor: pointer; }

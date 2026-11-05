@@ -293,12 +293,31 @@ export function RankForm({ D, cid, onClose, onSaved }) {
 }
 
 /* ───────── Client and team member ───────── */
+// Pick the people on a client: everyone ticked works on it and sees it in their Employee Portal
+export function TeamPick({ D, value, onChange, compact }) {
+  const T = D.team.filter(t => t.portal !== false && t.isActive !== false);
+  const name = (id) => D.team.find(t => t.id === id)?.name || "Former member";
+  const left = T.filter(t => !value.includes(t.id));
+  return (
+    <div className={`tpick ${compact ? "sm" : ""}`}>
+      {value.map(id => <span key={id} className="tchip">{name(id)}<button type="button" aria-label={`Remove ${name(id)}`} onClick={() => onChange(value.filter(x => x !== id))}>×</button></span>)}
+      {left.length > 0 && (
+        <select value="" onChange={e => e.target.value && onChange([...value, e.target.value])} aria-label="Add a person">
+          <option value="">{value.length ? "+ Add" : "+ Assign people"}</option>
+          {left.map(t => <option key={t.id} value={t.id}>{t.name} · {(t.roles?.length ? t.roles : [t.role]).map(r => ({ seo: "SEO", ads: "Ads", design: "Design" }[r] || r)).join(", ")}</option>)}
+        </select>
+      )}
+      {!value.length && !left.length && <span className="sub">No team yet</span>}
+    </div>
+  );
+}
+
 export function ClientForm({ D, edit, onClose, onSaved }) {
   const [leads, setLeads] = useState(null);
   const [find, setFind] = useState("");
   const [f, setF] = useState(() => ({
     lead: edit?.lead?._id || edit?.lead || "", name: edit?.name || "", contact: edit?.contact || "", phone: edit?.phone || "", email: edit?.email || "",
-    site: edit?.site || "", start: edit?.start || T(0), seo: edit?.seo || "", ads: edit?.ads || "", design: edit?.design || "",
+    site: edit?.site || "", start: edit?.start || T(0), members: edit?.members || [],
     budget: edit?.budget ?? 0, backlink: edit?.targets?.backlink ?? 40, blog: edit?.targets?.blog ?? 4, gmb: edit?.targets?.gmb ?? 12, poster: edit?.targets?.poster ?? 6, keywords: "",
   }));
   const [busy, run] = useBusy();
@@ -319,12 +338,11 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
     // leads with an SEO / Ads monthly service first
     return hit.sort((a, b) => b.services.length - a.services.length).slice(0, 150);
   }, [leads, find, D.clients]);
-  const team = (role) => D.team.filter(t => t.role === role && t.isActive !== false);
   const submit = (ev) => {
     ev.preventDefault();
     const body = {
       lead: f.lead || null, name: f.name, contact: f.contact, phone: f.phone, email: f.email, site: f.site, start: f.start,
-      seo: f.seo || null, ads: f.ads || null, design: f.design || null, budget: Number(f.budget) || 0,
+      members: f.members, budget: Number(f.budget) || 0,
       targets: { backlink: Number(f.backlink), blog: Number(f.blog), gmb: Number(f.gmb), poster: Number(f.poster) },
       ...(edit ? {} : { keywords: f.keywords.split(/\r?\n|,/).map(x => x.trim()).filter(Boolean) }),
     };
@@ -357,9 +375,7 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
         </div>
         <div className="g4">
           <F label="Day 1 (start date)"><input type="date" value={f.start} onChange={set("start")} required /></F>
-          <F label="SEO analyst"><select value={f.seo} onChange={set("seo")}><option value="">None</option>{team("seo").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></F>
-          <F label="Google Ads"><select value={f.ads} onChange={set("ads")}><option value="">No ads</option>{team("ads").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></F>
-          <F label="Designer"><select value={f.design} onChange={set("design")}><option value="">None</option>{team("design").map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></F>
+          <div className="span3"><F label="Team on this client (everyone added works on it)"><TeamPick D={D} value={f.members} onChange={v => setF(x => ({ ...x, members: v }))} /></F></div>
         </div>
         <div className="g5">
           <F label="Backlinks / month"><input type="number" min="0" value={f.backlink} onChange={set("backlink")} /></F>

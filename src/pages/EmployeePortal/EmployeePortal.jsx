@@ -73,7 +73,11 @@ function useGet(path) {
   return { data: fresh ? st.data : null, err: fresh ? st.err : "", loading: !!path && !fresh, reload: useCallback(() => setN(x => x + 1), []) };
 }
 
-const Role = ({ r }) => <>{ROLES[r]?.[0] || r}<span className="sub">{ROLES[r]?.[1]}</span></>;
+// Every role an employee has: the main role first, then the extra ones
+const rolesOf = (a) => [...new Set([a?.role, ...(a?.roles || [])].filter(r => ROLES[r]))];
+const anyRole = (a, list) => rolesOf(a).some(r => list.includes(r));
+const roleNames = (a) => rolesOf(a).map(r => ROLES[r][0]).join(" · ");
+const Role = ({ a }) => <>{roleNames(a) || a.role}<span className="sub">{[...new Set(rolesOf(a).map(r => ROLES[r][1]))].join(" · ")}</span></>;
 const Av = ({ name, role }) => <span className="av" style={{ background: ROLES[role]?.[2] || "#64748B" }}>{initials(name)}</span>;
 
 export default function EmployeePortal() {
@@ -162,13 +166,13 @@ function People({ A }) {
           {A.loading ? <tr><td colSpan={7}><div className="empty">Loading…</div></td></tr> : shown.length ? shown.map(a => (
             <tr key={a.id}>
               <td><div className="ep-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">joined {fd(dayOf(a.created))}</span></span></div></td>
-              <td><Role r={a.role} /></td>
+              <td><Role a={a} /></td>
               <td>{a.email}<span className="sub">{a.phone}</span></td>
               <td className="ep-works">{a.orphan ? <span className="pill p-red">Removed from the CRM team</span>
                 : a.role === "acc" ? <span className="sub">All projects (accounts)</span>
                 : a.works.length ? <button type="button" className="btn sm" onClick={() => setWorksFor(a)}><FolderKanban size={13} /> {a.works.length} {a.works[0].kind === "client" ? "client" : "project"}{a.works.length > 1 ? "s" : ""} · View</button>
                 : a.status !== "active" ? "-"
-                : SEO_ROLES.includes(a.role) ? <span className="sub">Not assigned yet · <Link to="/seo-team">assign</Link></span>
+                : anyRole(a, SEO_ROLES) ? <span className="sub">Not assigned yet · <Link to="/seo-team">assign</Link></span>
                 : <span className="sub">Not assigned yet · <button type="button" className="link" onClick={() => setWorksFor(a)}>assign</button></span>}</td>
               <td>{when(a.lastLogin)}<span className="sub">{a.logins} sign ins</span></td>
               <td>{a.status === "active" ? <span className="pill p-ok">Active</span> : a.status === "pending" ? <span className="pill p-amb">Waiting</span> : <span className="pill p-red">Disabled</span>}
@@ -258,23 +262,28 @@ function ProjectChecks({ list, value, onChange }) {
 // Add an employee (active straight away, with a password) or edit one's details
 function EmployeeForm({ a, onClose, onDone }) {
   const isNew = !a;
-  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", role: a?.role || "full", password: "" });
+  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", password: "" });
+  const [roles, setRoles] = useState(() => (a ? rolesOf(a) : ["full"]));   // the first one is the main role
+  const main = roles[0] || "";
+  const togRole = (k) => setRoles(L => (L.includes(k) ? L.filter(x => x !== k) : [...L, k]));
+  const onProjects = roles.some(r => PROJECT_ROLES.includes(r));
   const [ids, setIds] = useState([]);
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
-  const Pj = useGet(isNew && PROJECT_ROLES.includes(d.role) ? "/accounts/new/projects" : "");
+  const Pj = useGet(isNew && onProjects ? "/accounts/new/projects" : "");
   const set = (k) => (e) => setD(x => ({ ...x, [k]: e.target.value }));
   const submit = async (ev) => {
     ev.preventDefault();
     if (busy) return;
+    if (!roles.length) { toast.error("Pick at least one role"); return; }
     setBusy(true);
     try {
       if (isNew) {
-        await papi("/accounts", { method: "POST", body: { ...d, projectIds: PROJECT_ROLES.includes(d.role) ? ids : [] } });
+        await papi("/accounts", { method: "POST", body: { ...d, role: main, roles: roles.slice(1), projectIds: onProjects ? ids : [] } });
         toast.success(`${d.name} added. They can sign in to the Employee Portal now`);
         onDone({ a: { name: d.name, email: d.email, phone: d.phone }, pw: d.password, set: true });
       } else {
-        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, role: d.role } });
+        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, role: main, roles: roles.slice(1) } });
         toast.success("Employee updated"); onDone();
       }
     } catch (ex) { toast.error(ex.message); setBusy(false); }
@@ -284,11 +293,25 @@ function EmployeeForm({ a, onClose, onDone }) {
       <form onSubmit={submit} className="ep-form">
         <div className="g2">
           <label className="f"><span className="flabel">Full name</span><input type="text" required value={d.name} onChange={set("name")} /></label>
-          <label className="f"><span className="flabel">Role</span><select value={d.role} onChange={set("role")}>
+          <label className="f"><span className="flabel">Main role</span><select value={main} onChange={e => setRoles(L => [e.target.value, ...L.filter(x => x !== e.target.value)])}>
             {DEPTS.map(g => <optgroup key={g} label={g}>{Object.entries(ROLES).filter(([, r]) => r[1] === g).map(([k, r]) => <option key={k} value={k}>{r[0]}</option>)}</optgroup>)}
           </select></label>
           <label className="f"><span className="flabel">Email (their portal login)</span><input type="email" required disabled={!isNew} value={d.email} onChange={set("email")} /></label>
           <label className="f"><span className="flabel">Mobile number</span><input type="tel" value={d.phone} onChange={set("phone")} /></label>
+        </div>
+        <div className="f"><span className="flabel">All their roles ({roles.length}) · tick every kind of work they do</span>
+          <div className="ep-roles">{DEPTS.map(g => (
+            <div key={g} className="ep-rg"><b>{g}</b>
+              {Object.entries(ROLES).filter(([, r]) => r[1] === g).map(([k, r]) => (
+                <label key={k} className={`ep-rc ${roles.includes(k) ? "on" : ""}`}><input type="checkbox" checked={roles.includes(k)} onChange={() => togRole(k)} />{r[0]}{k === main && <em>main</em>}</label>
+              ))}
+              {Object.entries(ROLES).filter(([, r]) => r[1] === g).length > 1 && (
+                <button type="button" className="link" onClick={() => { const K = Object.entries(ROLES).filter(([, r]) => r[1] === g).map(([k]) => k); const all = K.every(k => roles.includes(k)); setRoles(L => (all ? L.filter(x => !K.includes(x)) : [...L, ...K.filter(k => !L.includes(k))])); }}>
+                  {Object.entries(ROLES).filter(([, r]) => r[1] === g).every(([k]) => roles.includes(k)) ? "Clear" : "All"}</button>
+              )}
+            </div>
+          ))}</div>
+          <span className="sub">Their portal shows the pages and work types of every role ticked. The main role decides their colour and title.</span>
         </div>
         {isNew && (
           <label className="f"><span className="flabel">Password</span>
@@ -296,10 +319,10 @@ function EmployeeForm({ a, onClose, onDone }) {
               <button type="button" onClick={() => setShow(s => !s)} aria-label={show ? "Hide password" : "Show password"}>{show ? <EyeOff size={16} /> : <Eye size={16} />}</button></span>
             <span className="sub">At least 8 characters, with a number. Share it with them after saving.</span></label>
         )}
-        {isNew && PROJECT_ROLES.includes(d.role) && (
+        {isNew && onProjects && (
           <div className="f"><span className="flabel">Projects ({ids.length})</span><ProjectChecks list={Pj.data} value={ids} onChange={setIds} /></div>
         )}
-        {isNew && SEO_ROLES.includes(d.role) && <p className="sub">Assign their clients in SEO &amp; Ads Team after adding them.</p>}
+        {isNew && roles.some(r => SEO_ROLES.includes(r)) && <p className="sub">Assign their clients in SEO &amp; Ads Team after adding them.</p>}
         <div className="ep-row"><button type="button" className="btn" onClick={onClose}>Cancel</button><button className="btn pri" disabled={busy}>{busy ? "Saving…" : isNew ? "Add employee" : "Save"}</button></div>
       </form>
     </Modal>
@@ -361,7 +384,7 @@ function Work({ accounts, today }) {
   const W = useGet(`/work?from=${from}&to=${T(0)}`);
   const d = W.data || { accounts: [], work: [], days: [], blockers: [], attendance: [] };
   const roles = TEAMS[team][1];
-  const accs = d.accounts.filter(a => !roles || roles.includes(a.role));
+  const accs = d.accounts.filter(a => !roles || anyRole(a, roles));
   const ids = new Set(accs.map(a => a.id));
   const acc = (id) => d.accounts.find(a => a.id === String(id));
   const work = d.work.filter(w => ids.has(String(w.account)) && (!who || String(w.account) === who));
@@ -421,7 +444,7 @@ function Work({ accounts, today }) {
             <div className="ll flat">{per.map(p => (
               <div key={p.a.id}>
                 <Av name={p.a.name} role={p.a.role} />
-                <span className="x"><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]} · {p.n} items{p.extra ? ` · ${h1(p.extra)} h extra` : ""}{today ? "" : ` · ${p.sub} days submitted`}</span>
+                <span className="x"><b>{p.a.name}</b><span className="sub">{roleNames(p.a)} · {p.n} items{p.extra ? ` · ${h1(p.extra)} h extra` : ""}{today ? "" : ` · ${p.sub} days submitted`}</span>
                   {p.att?.sessions?.length > 0 && <span className="sub">{attTxt(p.att.sessions)}</span>}
                   {p.day && (p.day.note || p.day.plan) && <span className="sub">{p.day.note}{p.day.plan ? ` · Tomorrow: ${p.day.plan}` : ""}</span>}</span>
                 <span className="num">{h1(p.hrs)} h</span>
@@ -440,7 +463,7 @@ function Work({ accounts, today }) {
                 const S = p.att?.sessions || [], open = S.find(x => !x.out), last = [...S].reverse().find(x => x.out);
                 return (
                   <tr key={p.a.id} onClick={() => setPerson(p.a.id)}>
-                    <td><div className="ep-who"><Av name={p.a.name} role={p.a.role} /><span><b>{p.a.name}</b><span className="sub">{ROLES[p.a.role]?.[0]}</span></span></div></td>
+                    <td><div className="ep-who"><Av name={p.a.name} role={p.a.role} /><span><b>{p.a.name}</b><span className="sub">{roleNames(p.a)}</span></span></div></td>
                     <td>{S.length ? <b>{tm(S[0].in)}</b> : <span className="sub">Not checked in</span>}</td>
                     <td>{open ? <span className="pill p-ok">Still in</span> : last ? <b>{tm(last.out)}</b> : <span className="sub">-</span>}
                       {S.length > 0 && <span className="sub">{attTxt(S).split(" · ").pop()}</span>}</td>
@@ -458,7 +481,7 @@ function Work({ accounts, today }) {
       )}
       {person && <PersonWork a={acc(person)} work={work.filter(w => String(w.account) === person)} days={days.filter(x => String(x.account) === person)}
         attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={RANGES.find(r => r[0] === rg)[1]} onClose={() => setPerson(null)} />}
-      {assign && <AssignTask accounts={accounts.filter(a => a.status === "active" && (!roles || roles.includes(a.role)))} init={assign} onClose={() => setAssign(null)} onDone={() => setAssign(null)} />}
+      {assign && <AssignTask accounts={accounts.filter(a => a.status === "active" && (!roles || anyRole(a, roles)))} init={assign} onClose={() => setAssign(null)} onDone={() => setAssign(null)} />}
     </>
   );
 }
@@ -470,7 +493,7 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
   if (!a) return null;
   return (
     <Modal title={`${a.name} · ${period}`} onClose={onClose} wide>
-      <p className="sub" style={{ marginTop: 0 }}>{ROLES[a.role]?.[0]} · {work.length} items · {h1(hrs)} h{extra ? ` (${h1(extra)} h extra)` : ""} · {days.length} days submitted</p>
+      <p className="sub" style={{ marginTop: 0 }}>{roleNames(a)} · {work.length} items · {h1(hrs)} h{extra ? ` (${h1(extra)} h extra)` : ""} · {days.length} days submitted</p>
       {dates.length ? dates.map(dt => {
         const L = work.filter(w => w.date === dt), day = days.find(x => x.date === dt), att = attendance.find(x => x.date === dt);
         return (
@@ -510,7 +533,7 @@ function AssignTask({ accounts, init, onClose, onDone }) {
     <Modal title="Assign a task" onClose={onClose}>
       <form onSubmit={submit} className="ep-form">
         <label className="f"><span className="flabel">Employee</span><select name="account" required value={who} onChange={e => setWho(e.target.value)}>
-          <option value="">Choose</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {ROLES[a.role]?.[0]}</option>)}</select></label>
+          <option value="">Choose</option>{accounts.map(a => <option key={a.id} value={a.id}>{a.name} · {roleNames(a)}</option>)}</select></label>
         <label className="f"><span className="flabel">Task</span><input name="title" type="text" required /></label>
         <div className="g2">
           <ProjectPick key={who} who={who} loading={Pj.loading} list={Pj.data} />

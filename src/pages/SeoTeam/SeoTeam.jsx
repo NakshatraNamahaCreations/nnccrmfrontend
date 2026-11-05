@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw } from "lucide-react";
+import { Link } from "react-router-dom";
+import { billingApi } from "../ProjectBilling/billingMeta";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import {
   seoApi, T, ds, fd, fds, fdw, inr, inr2, num, pct, initials, waPhone, TYPES, ROLE,
   weekOf, monthOf, period, PER, inP, workdaysIn, adsAgg, kwStat, posTxt, posVal, dist, BUCKETS, downloadCsv, copy, greet, parse, addD,
 } from "./seoUtil";
-import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm } from "./SeoForms";
+import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm , TeamPick } from "./SeoForms";
 import "./SeoTeam.css";
 
 const TABS = [["today", "Today"], ["work", "Work log"], ["ads", "Google Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
@@ -34,6 +36,8 @@ export default function SeoTeam() {
     const team = raw.team.map(t => ({ ...t, id: String(t._id) }));
     const clients = raw.clients.map(c => ({
       ...c, id: String(c._id), start: ds(c.start), seo: c.seo ? String(c.seo) : "", ads: c.ads ? String(c.ads) : "", design: c.design ? String(c.design) : "",
+      // the team; older clients only had the three single fields
+      members: (c.members?.length ? c.members.map(String) : [...new Set([c.seo, c.ads, c.design].filter(Boolean).map(String))]),
       phone: c.phone || c.lead?.phone || "", email: c.email || c.lead?.email || "",
     }));
     const work = raw.work.map(w => ({ ...w, id: String(w._id), date: ds(w.date), cid: String(w.client), who: w.who ? String(w.who) : "" }));
@@ -57,7 +61,7 @@ export default function SeoTeam() {
   const person = (id) => D.team.find(t => t.id === id);
   const av = (id) => { const p = person(id); return p ? <span key={id} className="av" style={{ background: ROLE[p.role][1] }} title={p.name}>{initials(p.name)}</span> : null; };
   const active = D.clients.filter(c => c.isActive !== false);
-  const mineC = (c) => who === "all" || [c.seo, c.ads, c.design].includes(who);
+  const mineC = (c) => who === "all" || c.members.includes(who) || [c.seo, c.ads, c.design].includes(who);
   const ctx = { D, client, person, av, mineC, active, who, setModal, load, setTab, sel, setSel };
   const pend = active.filter(c => c.ads && mineC(c) && !D.ads.some(r => r.cid === c.id && r.date === T(0))).length;
   const done = (msg) => { setModal(null); if (msg) toast.success(msg); load(); };
@@ -79,11 +83,10 @@ export default function SeoTeam() {
             <span className="sp" />
             <select value={who} onChange={e => setWho(e.target.value)} aria-label="View as">
               <option value="all">Whole team</option>
-              {D.team.filter(t => t.isActive !== false).map(t => <option key={t.id} value={t.id}>{t.name} · {ROLE[t.role][0]}</option>)}
+              {D.team.filter(t => t.portal !== false && t.isActive !== false).map(t => <option key={t.id} value={t.id}>{t.name} · {(t.roles?.length ? t.roles : [t.role]).map(r => ROLE[r]?.[0] || r).join(", ")}</option>)}
             </select>
             <button type="button" className="btn ic" onClick={load} aria-label="Refresh"><RefreshCw size={14} className={loading ? "spin" : ""} /></button>
-            <button type="button" className="btn" onClick={() => setModal({ kind: "ads" })} disabled={!active.some(c => c.ads)}>+ Ads daily report</button>
-            <button type="button" className="btn pri" onClick={() => setModal({ kind: "work" })} disabled={!active.length}>+ Log work</button>
+            <span className="sub sd-own">The team logs work and sends reports from the Employee Portal. Here you assign, set targets and follow up.</span>
           </header>
 
           {error && <div className="empty err">{error}</div>}
@@ -192,6 +195,26 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
     };
   });
   const dayOfMonth = parse(T(0)).getDate();
+  const member = (id) => D.team.find(t => t.id === id);
+  // A message in the Employee Portal to whoever is behind on this client
+  const remind = async (r) => {
+    const todo = [];
+    if (r.c.ads && !r.adsDay?.sent) todo.push({ who: r.c.ads, t: "today's Google Ads report" });
+    if (r.bToday < r.bt) todo.push({ who: r.c.seo, t: `backlinks (${r.bToday} of ${r.bt} today)` });
+    if (r.gW < r.gt) todo.push({ who: r.c.seo, t: `GMB posts (${r.gW} of ${r.gt} this week)` });
+    if (r.blM < (r.c.targets?.blog || 0)) todo.push({ who: r.c.seo, t: `blogs (${r.blM} of ${r.c.targets?.blog || 0} this month)` });
+    if (r.poM < (r.c.targets?.poster || 0)) todo.push({ who: r.c.design, t: `posters (${r.poM} of ${r.c.targets?.poster || 0} this month)` });
+    // everyone on the client's team is reminded of everything pending
+    const by = {};
+    const people = [...new Set([...r.c.members, ...todo.map(x => x.who)].filter(Boolean))];
+    people.forEach(id => { const m = member(id); if (m?.account) by[m.account] = { name: m.name, items: todo.map(x => x.t) }; });
+    const L = Object.entries(by);
+    if (!L.length) { toast.error(todo.length ? "The people on this client have no Employee Portal login" : "Nothing pending for this client"); return; }
+    try {
+      await Promise.all(L.map(([acc, v]) => billingApi(`/portal/admin/messages/${acc}`, { method: "POST", body: { refName: r.c.name, text: `Hi ${v.name.split(" ")[0]}, a reminder for ${r.c.name}: please complete ${v.items.join(", ")}. Thank you.` } })));
+      toast.success(`Reminder sent to ${L.map(([, v]) => v.name).join(" and ")}`);
+    } catch (e) { toast.error(e.message); }
+  };
   return (
     <>
       <h2 className="t">Today<span>.</span></h2>
@@ -208,11 +231,11 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
           {rows.map(r => (
             <tr key={r.c.id}>
               <td><button type="button" className="link" onClick={() => { setSel(s => ({ ...s, rc: r.c.id })); setTab("reports"); }}>{r.c.name}</button><span className="sub">{r.c.site}</span></td>
-              <td><span className="who">{av(r.c.seo)}{r.c.ads ? av(r.c.ads) : null}{av(r.c.design)}</span></td>
+              <td><span className="who">{r.c.members.map(id => av(id))}</span></td>
               <td>{r.c.ads
                 ? r.adsDay?.sent ? <Chk ok>Sent</Chk>
-                  : r.adsDay ? <button type="button" className="btn sm wa" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Send</button>
-                    : <button type="button" className={`btn sm ${hr >= 18 ? "late" : "pri"}`} onClick={() => setModal({ kind: "ads", cid: r.c.id })}>Create and send</button>
+                  : r.adsDay ? <button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>
+                    : <span className={`pill ${hr >= 18 ? "p-red" : "p-grey"}`}>{hr >= 18 ? "Late" : "Not sent yet"}{member(r.c.ads) ? ` · ${member(r.c.ads).name.split(" ")[0]}` : ""}</span>
                 : <span className="sub">No ads</span>}</td>
               <td><Chk ok={r.bToday >= r.bt}>{r.bToday} of {r.bt}</Chk></td>
               <td><Chk ok={r.gW >= r.gt}>{r.gW} of {r.gt}</Chk></td>
@@ -222,7 +245,7 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
                 <><span className="ub"><span className={`bar ${pct(r.m.spend, r.c.budget) > pct(dayOfMonth, 30) + 12 ? "red" : ""}`}><i style={{ width: `${Math.min(100, pct(r.m.spend, r.c.budget))}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{pct(r.m.spend, r.c.budget)}%</span></span>
                   <span className="sub">{inr(r.m.spend)} of {inr(r.c.budget)}</span></>
               ) : <span className="sub">-</span>}</td>
-              <td className="r"><button type="button" className="btn sm" onClick={() => setModal({ kind: "work", cid: r.c.id })}>+ Log</button></td>
+              <td className="r"><button type="button" className="btn sm" onClick={() => remind(r)} title="Message the person responsible in the Employee Portal">Remind</button></td>
             </tr>
           ))}
         </tbody></table></div>
@@ -296,7 +319,7 @@ function AdsTab({ D, client, av, mineC, active, setModal, sel, setSel }) {
       <div className="filters">
         <ClientSelect list={C} value={sel.ac} onChange={v => setSel(s => ({ ...s, ac: v }))} allLabel="All ad clients" />
         <span style={{ flex: 1 }} />
-        <button type="button" className="btn pri" disabled={!C.length} onClick={() => setModal({ kind: "ads", cid: sel.ac })}>+ Daily report</button>
+        <span className="note">Daily reports are made and sent by the Google Ads expert from the Employee Portal.</span>
       </div>
       <div className="card"><div className="tw"><table><thead><tr><th>Date</th><th>Client</th><th className="r">Spent</th><th className="r">Clicks</th><th className="r">CTR</th><th className="r">Avg CPC</th><th className="r">Leads</th><th className="r">Cost per lead</th><th>Search terms</th><th>By</th><th className="r">Report</th></tr></thead><tbody>
         {L.map(r => {
@@ -310,7 +333,7 @@ function AdsTab({ D, client, av, mineC, active, setModal, sel, setSel }) {
               <td>{av(r.who)}</td>
               <td className="r" style={{ whiteSpace: "nowrap" }}>
                 <button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.id })}>View</button>{" "}
-                {r.sent ? <span className="pill p-ok">Sent</span> : <button type="button" className="btn sm wa" onClick={() => setModal({ kind: "adsview", id: r.id })}>Send</button>}
+                {r.sent ? <span className="pill p-ok">Sent</span> : <span className="pill p-grey">Not sent</span>}
               </td>
             </tr>
           );
@@ -342,7 +365,7 @@ function RanksView({ D, active, mineC, setModal, sel, setSel }) {
         <span className="note">Started {fd(c.start)} · {K.length} keywords{lastCheck ? ` · last checked ${fds(lastCheck)}` : " · not checked yet"}</span>
         <span style={{ flex: 1 }} />
         <button type="button" className="btn" onClick={() => setModal({ kind: "kwadd", cid: c.id })}>+ Agreed keyword</button>
-        <button type="button" className="btn pri" disabled={!K.length} onClick={() => setModal({ kind: "rank", cid: c.id })}>+ Rank check</button>
+        <span className="note">Rank checks are done by the SEO analyst in the Employee Portal.</span>
       </div>
       <div className="kpis">
         {BUCKETS.map(b => {
@@ -621,7 +644,7 @@ SEO and Ads team, Nakshatra Namaha Creations`;
 }
 
 function TeamReport({ D, P, rp, who, client, av, mineC }) {
-  const T1 = D.team.filter(t => (who === "all" || t.id === who) && t.isActive !== false);
+  const T1 = D.team.filter(t => (who === "all" || t.id === who) && t.portal !== false && t.isActive !== false);
   const wdE = Math.max(1, workdaysIn([P[0], P[1] < T(0) ? P[1] : T(0)])), el = wdE / Math.max(1, workdaysIn(P));
   const isM = rp.includes("month");
   return (
@@ -665,11 +688,6 @@ function ClientsView({ D, setModal, load }) {
     try { const j = await seoApi(`/clients/${c.id}`, { method: "DELETE" }); toast.success(j.deactivated ? "Marked inactive (work kept)" : "Removed"); load(); }
     catch (err) { toast.error(err.message); }
   };
-  const removeMember = async (t) => {
-    if (!window.confirm(`Remove ${t.name}?`)) return;
-    try { const j = await seoApi(`/team/${t.id}`, { method: "DELETE" }); toast.success(j.deactivated ? "Marked inactive (their work is kept)" : "Removed"); load(); }
-    catch (err) { toast.error(err.message); }
-  };
   const onLogo = (file) => {
     if (!file) return;
     if (file.size > 500 * 1024) { toast.error("Logo must be under 500 KB"); return; }
@@ -680,13 +698,6 @@ function ClientsView({ D, setModal, load }) {
     };
     rd.readAsDataURL(file);
   };
-  const teamOf = (role) => D.team.filter(t => t.role === role && t.isActive !== false);
-  const Sel = ({ c, k, role }) => (
-    <select className="mini" value={c[k] || ""} onChange={e => save(c, { [k]: e.target.value || null })} aria-label={k}>
-      <option value="">None</option>
-      {teamOf(role).map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-    </select>
-  );
   const Num = ({ c, k, step = 1 }) => {
     const v = k === "budget" ? c.budget : c.targets?.[k];
     return <input className="mini num" type="number" min="0" step={step} defaultValue={v} key={`${c.id}${k}${v}`} aria-label={k}
@@ -697,26 +708,26 @@ function ClientsView({ D, setModal, load }) {
       <h2 className="t">Clients and settings<span>.</span></h2>
       <p className="lead">Monthly targets per client and who handles them. The Today checklist and reports measure against these.</p>
 
-      <div className="card"><h3>Team <small>{D.team.filter(t => t.isActive !== false).length} active</small><button type="button" className="btn sm pri" onClick={() => setModal({ kind: "member" })}>+ Add team member</button></h3>
-        <div className="tw"><table style={{ minWidth: 560 }}><thead><tr><th>Name</th><th>Role</th><th>Phone</th><th>Email</th><th>Status</th><th className="r" /></tr></thead><tbody>
-          {D.team.map(t => (
+      <div className="card"><h3>Team <small>{D.team.filter(t => t.portal !== false && t.isActive !== false).length} active · from Employee Portal</small></h3>
+        <div className="tw"><table style={{ minWidth: 560 }}><thead><tr><th>Name</th><th>Roles</th><th>Phone</th><th>Email</th><th>Status</th></tr></thead><tbody>
+          {D.team.filter(t => t.portal !== false).map(t => (
             <tr key={t.id}>
               <td><span className="who"><span className="av" style={{ background: ROLE[t.role][1] }}>{initials(t.name)}</span><b style={{ fontWeight: 500 }}>{t.name}</b></span></td>
-              <td>{ROLE[t.role][0]}</td><td>{t.phone || "-"}</td><td>{t.email || "-"}</td>
+              <td>{(t.roles?.length ? t.roles : [t.role]).map(r => ROLE[r]?.[0] || r).join(" · ")}</td><td>{t.phone || "-"}</td><td>{t.email || "-"}</td>
               <td>{t.isActive !== false ? <span className="pill p-ok">Active</span> : <span className="pill p-grey">Inactive</span>}</td>
-              <td className="r" style={{ whiteSpace: "nowrap" }}><button type="button" className="btn sm" onClick={() => setModal({ kind: "member", edit: t })}>Edit</button>{" "}<button type="button" className="btn sm" onClick={() => removeMember(t)}>Remove</button></td>
             </tr>
           ))}
-          {!D.team.length && <tr><td colSpan={6} className="empty">Add your SEO analysts, Google Ads experts and designers first.</td></tr>}
+          {!D.team.some(t => t.portal !== false) && <tr><td colSpan={5} className="empty">No one yet. Add employees with an SEO, Google Ads or design role in Employee Portal and they show here.</td></tr>}
         </tbody></table></div>
+        <p className="sub" style={{ padding: "8px 16px 12px", margin: 0 }}>The team is everyone in Employee Portal with an SEO analyst, SEO expert, Google Ads expert or graphic designer role. Change roles there; add any of them to a client below; everyone on a client's team does its work.{D.team.some(t => !t.portal) ? ` ${D.team.filter(t => !t.portal).length} older entr${D.team.filter(t => !t.portal).length === 1 ? "y" : "ies"} without a portal login ${D.team.filter(t => !t.portal).length === 1 ? "is" : "are"} hidden; their past work is kept.` : ""}</p>
       </div>
 
       <div className="card"><h3>Clients <small>{D.clients.filter(c => c.isActive !== false).length} active</small><button type="button" className="btn sm pri" onClick={() => setModal({ kind: "client" })}>+ Add client</button></h3>
-        <div className="tw"><table><thead><tr><th>Client</th><th>SEO analyst</th><th>Google Ads</th><th>Designer</th><th className="r">Backlinks / month</th><th className="r">Blogs / month</th><th className="r">GMB / month</th><th className="r">Posters / month</th><th className="r">Ad budget / month</th><th className="r" /></tr></thead><tbody>
+        <div className="tw"><table><thead><tr><th>Client</th><th style={{ minWidth: 220 }}>Team</th><th className="r">Backlinks / month</th><th className="r">Blogs / month</th><th className="r">GMB / month</th><th className="r">Posters / month</th><th className="r">Ad budget / month</th><th className="r" /></tr></thead><tbody>
           {D.clients.map(c => (
             <tr key={c.id} style={c.isActive === false ? { opacity: 0.55 } : undefined}>
               <td><b style={{ fontWeight: 500 }}>{c.name}</b><span className="sub">{c.site || "no website"} · since {fds(c.start)}{c.lead ? " · CRM lead" : ""}</span></td>
-              <td><Sel c={c} k="seo" role="seo" /></td><td><Sel c={c} k="ads" role="ads" /></td><td><Sel c={c} k="design" role="design" /></td>
+              <td><TeamPick D={D} value={c.members} onChange={v => save(c, { members: v })} compact /></td>
               <td className="r"><Num c={c} k="backlink" /></td><td className="r"><Num c={c} k="blog" /></td><td className="r"><Num c={c} k="gmb" /></td><td className="r"><Num c={c} k="poster" /></td>
               <td className="r"><Num c={c} k="budget" step={1000} /></td>
               <td className="r" style={{ whiteSpace: "nowrap" }}>
@@ -727,7 +738,7 @@ function ClientsView({ D, setModal, load }) {
               </td>
             </tr>
           ))}
-          {!D.clients.length && <tr><td colSpan={10} className="empty">No clients yet. Click “+ Add client” and pick the lead from the CRM.</td></tr>}
+          {!D.clients.length && <tr><td colSpan={8} className="empty">No clients yet. Click “+ Add client” and pick the lead from the CRM.</td></tr>}
         </tbody></table></div>
       </div>
 
