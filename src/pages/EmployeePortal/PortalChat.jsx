@@ -7,6 +7,7 @@ import { initials } from "../SeoTeam/seoUtil";
 import { useRise, useNewMessage } from "../../utils/ding";
 import { useLive, every, useTyping, sayTyping, typingText, myAdminName } from "../../utils/live";
 import { Tick } from "../../components/Tick";
+import { noEmoji } from "../../utils/noEmoji";
 
 const mine = (m) => m.from === "admin";
 
@@ -95,7 +96,7 @@ export default function PortalChat({ onUnread }) {
           {threads == null ? <div className="empty">Loading…</div> : !threads.length ? <div className="empty">No employees yet.</div> : threads.map(t => (
             <button key={t.id} type="button" className={`ep-th ${sel === t.id ? "on" : ""}`} onClick={() => setSel(t.id)}>
               <span className="av" style={{ background: "#2563EB" }}>{initials(t.name)}</span>
-              <span className="ep-th-x"><b>{t.name}</b>{typingIn(t.id).length ? <span className="sub row-typing">typing…</span> : <span className="sub">{t.last ? `${t.last.from === "admin" ? "You: " : ""}${t.last.text}` : ROLE[t.role] || t.role}</span>}</span>
+              <span className="ep-th-x"><b>{t.name}</b>{typingIn(t.id).length ? <span className="sub row-typing">typing…</span> : <span className="sub">{t.last ? `${t.last.from === "admin" ? "You: " : ""}${noEmoji(t.last.text)}` : ROLE[t.role] || t.role}</span>}</span>
               {t.unread > 0 && <em>{t.unread}</em>}
             </button>
           ))}
@@ -105,12 +106,12 @@ export default function PortalChat({ onUnread }) {
             <>
               <div className="ep-conv-h"><b>{cur.name}</b><span className="sub">{ROLE[cur.role] || cur.role}{cur.status === "disabled" ? " · disabled" : ""}</span></div>
               <div className="ep-conv-b" ref={box}>
-                {msgs.length ? msgs.map(m => (
+                {msgs.some(m => noEmoji(m.text).trim()) ? msgs.filter(m => noEmoji(m.text).trim()).map(m => (
                   <div key={m._id} className={`ep-cm ${m.from === "admin" ? "me" : ""}`}>
                     <div className="bub">
                       {m.from === "admin" && <b className="who">{m.by}</b>}
                       {m.refName && <span className="about">About {m.refName}</span>}
-                      <span className="txt"><Linkify text={m.text} /></span>
+                      <span className="txt"><Linkify text={noEmoji(m.text)} /></span>
                       <small>{tm(m.createdAt)}{m.from === "admin" && <Tick pending={m.pending} seen={m.readEmp} title={m.readEmp ? `Seen${m.seenAt ? ` ${tm(m.seenAt)}` : ""}` : "Sent"} />}</small>
                     </div>
                   </div>
@@ -118,7 +119,7 @@ export default function PortalChat({ onUnread }) {
               </div>
               {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
               <form className="ep-conv-f" onSubmit={send}>
-                <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "pm", account: sel, name: myAdminName() }); }} placeholder={`Message ${cur.name}…`} aria-label="Message"
+                <textarea rows={1} value={text} onChange={e => { const v = noEmoji(e.target.value); setText(v); if (v) sayTyping({ chat: "pm", account: sel, name: myAdminName() }); }} placeholder={`Message ${cur.name}…`} aria-label="Message"
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
                 <button className="btn pri" disabled={busy || !text.trim()} aria-label="Send"><Send size={15} /></button>
               </form>

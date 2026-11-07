@@ -6,6 +6,7 @@ import { toast } from "../../utils/toast";
 import { useRise, useNewMessage } from "../../utils/ding";
 import { useLive, every, useTyping, sayTyping, typingText, myAdminName, myAdminWho } from "../../utils/live";
 import { Tick } from "../Tick";
+import { noEmoji } from "../../utils/noEmoji";
 import "./TeamChat.css";
 
 // Floating team chat in the CRM: the admin joins the Employee Portal group channels
@@ -73,6 +74,7 @@ export default function TeamChat() {
   }, [open, hasCur]);
 
 
+  const shownMsgs = msgs.filter(m => noEmoji(m.text).trim());
   if (off) return null;
   // The message shows straight away; it is swapped for the saved one when the server answers
   const send = async (e) => {
@@ -102,7 +104,7 @@ export default function TeamChat() {
               {chans.map(c => (
                 <button key={c.id} type="button" className={`nnc-tc-row ${c.unread ? "un" : ""}`} onClick={() => { setMsgs([]); setCur(c); }}>
                   <span className="nnc-tc-av grp"><Hash size={15} /></span>
-                  <span className="nnc-tc-rx"><b>{c.name}</b>{typingIn(c.id).length ? <span className="row-typing">{typingText(typingIn(c.id))}</span> : <span>{c.last ? `${c.last.name}: ${c.last.text}` : "No messages yet"}</span>}</span>
+                  <span className="nnc-tc-rx"><b>{c.name}</b>{typingIn(c.id).length ? <span className="row-typing">{typingText(typingIn(c.id))}</span> : <span>{c.last ? `${c.last.name}: ${noEmoji(c.last.text)}` : "No messages yet"}</span>}</span>
                   <span className="nnc-tc-rm">{c.last && <small>{tm(c.last.at)}</small>}{c.unread > 0 && <em>{c.unread}</em>}</span>
                 </button>
               ))}
@@ -111,7 +113,7 @@ export default function TeamChat() {
           ) : (
             <>
               <div className="nnc-tc-body">
-                {!msgs.length ? <div className="nnc-tc-empty">No messages yet.</div> : msgs.map((m, i) => {
+                {!shownMsgs.length ? <div className="nnc-tc-empty">No messages yet.</div> : shownMsgs.map((m, i, msgs) => {
                   const first = i === 0 || msgs[i - 1].who !== m.who || new Date(m.createdAt) - new Date(msgs[i - 1].createdAt) > 600000;
                   const R = ROLE[m.role] || [m.role, "#64748B"];
                   return (
@@ -119,7 +121,7 @@ export default function TeamChat() {
                       {!m.mine && <span className="nnc-tc-av" style={{ background: R[1], visibility: first ? "visible" : "hidden" }}>{ini(m.name)}</span>}
                       <div className="nnc-tc-bub">
                         {first && !m.mine && <b className="nnc-tc-who">{m.name} <span>{R[0]}</span></b>}
-                        <span className="nnc-tc-txt"><Linkify text={m.text} /></span>
+                        <span className="nnc-tc-txt"><Linkify text={noEmoji(m.text)} /></span>
                         <small>{tm(m.createdAt)}{m.mine && <Tick pending={m.pending} seen={m.seenBy > 0} title={m.seenBy > 0 ? `Seen by ${m.seenBy}` : "Sent"} />}{m.mine && m.seenBy > 0 && <span className="tick-n">{m.seenBy}</span>}</small>
                       </div>
                     </div>
@@ -129,7 +131,7 @@ export default function TeamChat() {
               </div>
               {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
               <form className="nnc-tc-f" onSubmit={send}>
-                <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "team", channel: cur.id, name: myAdminName() }); }} placeholder={`Message ${cur.name}…`} aria-label="Message"
+                <textarea rows={1} value={text} onChange={e => { const v = noEmoji(e.target.value); setText(v); if (v) sayTyping({ chat: "team", channel: cur.id, name: myAdminName() }); }} placeholder={`Message ${cur.name}…`} aria-label="Message"
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
                 <button className="nnc-tc-send" disabled={busy || !text.trim()} aria-label="Send"><Send size={16} /></button>
               </form>
