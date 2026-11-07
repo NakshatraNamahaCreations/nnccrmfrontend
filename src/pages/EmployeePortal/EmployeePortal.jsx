@@ -31,7 +31,7 @@ const TY = {
   poster: "Poster or creative", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
   webcontent: "Website content", blogcontent: "Blog content written", landing: "Landing page content", campaign: "Campaign setup",
   social: "Social media posts", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
-  kwresearch: "Keyword research", metaads: "Meta Ads",
+  kwresearch: "Keyword research", metaads: "Meta Ads", tracking: "GSC / GA4 / GTM setup",
 };
 const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
 const RANGES = [["today", "Today", 0], ["week", "Last 7 days", -6], ["month", "Last 30 days", -29]];
@@ -48,15 +48,16 @@ function metaTxt(e) {
   if (m.mod) o.push(m.mod); if (m.terms) o.push(m.terms);
   if (m.pages) o.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) o.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
   if (m.kws) o.push(`${m.kws} keywords`); if (m.month) o.push(m.month);
+  if (m.tools) o.push(m.tools);
   if (m.files?.length) o.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return o.join(" · ");
 }
 
 // Screenshots, videos or files attached to a logged piece of work
 function WorkFiles({ e }) {
-  const L = e.meta?.files || [];
-  if (!L.length) return null;
-  return <span className="ep-wfiles">{L.map(f => <a key={f.url} href={/^https?:/.test(f.url) ? f.url : `${API}${f.url}`} target="_blank" rel="noopener noreferrer" title={f.name}>{f.name}</a>)}</span>;
+  const L = e.meta?.files || [], K = (e.meta?.links || []).length > 1 ? e.meta.links : [];
+  if (!L.length && !K.length) return null;
+  return <span className="ep-wfiles">{K.map(x => <a key={x.url} href={x.url} target="_blank" rel="noopener noreferrer">{x.l} link</a>)}{L.map(f => <a key={f.url} href={/^https?:/.test(f.url) ? f.url : `${API}${f.url}`} target="_blank" rel="noopener noreferrer" title={f.name}>{f.name}</a>)}</span>;
 }
 
 function Modal({ title, onClose, children, wide }) {
