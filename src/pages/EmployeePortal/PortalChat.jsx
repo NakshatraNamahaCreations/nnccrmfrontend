@@ -1,10 +1,12 @@
+import Linkify from "../../components/Linkify";
 import { useEffect, useRef, useState } from "react";
 import { Send, Megaphone, X } from "lucide-react";
 import { toast } from "../../utils/toast";
 import { billingApi } from "../ProjectBilling/billingMeta";
 import { initials } from "../SeoTeam/seoUtil";
 import { useRise, useNewMessage } from "../../utils/ding";
-import { useLive, every } from "../../utils/live";
+import { useLive, every, useTyping, sayTyping, typingText, myAdminName } from "../../utils/live";
+import { Tick } from "../../components/Tick";
 
 const mine = (m) => m.from === "admin";
 
@@ -25,6 +27,8 @@ export default function PortalChat({ onUnread }) {
   const [busy, setBusy] = useState(false);
   const [ann, setAnn] = useState(false);
   const [tick, setTick] = useState(0);
+  const typingIn = useTyping((d) => (d.chat === "pm" && d.from === "emp" ? { chat: d.account, person: d.account } : null));
+  const tp = sel ? typingIn(sel) : [];
 
   useEffect(() => {
     let live = true;
@@ -91,7 +95,7 @@ export default function PortalChat({ onUnread }) {
           {threads == null ? <div className="empty">Loading…</div> : !threads.length ? <div className="empty">No employees yet.</div> : threads.map(t => (
             <button key={t.id} type="button" className={`ep-th ${sel === t.id ? "on" : ""}`} onClick={() => setSel(t.id)}>
               <span className="av" style={{ background: "#2563EB" }}>{initials(t.name)}</span>
-              <span className="ep-th-x"><b>{t.name}</b><span className="sub">{t.last ? `${t.last.from === "admin" ? "You: " : ""}${t.last.text}` : ROLE[t.role] || t.role}</span></span>
+              <span className="ep-th-x"><b>{t.name}</b>{typingIn(t.id).length ? <span className="sub row-typing">typing…</span> : <span className="sub">{t.last ? `${t.last.from === "admin" ? "You: " : ""}${t.last.text}` : ROLE[t.role] || t.role}</span>}</span>
               {t.unread > 0 && <em>{t.unread}</em>}
             </button>
           ))}
@@ -106,14 +110,15 @@ export default function PortalChat({ onUnread }) {
                     <div className="bub">
                       {m.from === "admin" && <b className="who">{m.by}</b>}
                       {m.refName && <span className="about">About {m.refName}</span>}
-                      <span className="txt">{m.text}</span>
-                      <small>{m.pending ? "sending…" : <>{tm(m.createdAt)}{m.from === "admin" ? (m.readEmp ? " · seen" : " · sent") : ""}</>}</small>
+                      <span className="txt"><Linkify text={m.text} /></span>
+                      <small>{tm(m.createdAt)}{m.from === "admin" && <Tick pending={m.pending} seen={m.readEmp} title={m.readEmp ? `Seen${m.seenAt ? ` ${tm(m.seenAt)}` : ""}` : "Sent"} />}</small>
                     </div>
                   </div>
                 )) : <div className="empty">No messages yet. Write the first one below.</div>}
               </div>
+              {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
               <form className="ep-conv-f" onSubmit={send}>
-                <textarea rows={1} value={text} onChange={e => setText(e.target.value)} placeholder={`Message ${cur.name}…`} aria-label="Message"
+                <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "pm", account: sel, name: myAdminName() }); }} placeholder={`Message ${cur.name}…`} aria-label="Message"
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
                 <button className="btn pri" disabled={busy || !text.trim()} aria-label="Send"><Send size={15} /></button>
               </form>

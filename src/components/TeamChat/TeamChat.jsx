@@ -1,9 +1,11 @@
+import Linkify from "../Linkify";
 import { useEffect, useRef, useState } from "react";
 import { MessageSquareText, X, ArrowLeft, Send, Hash } from "lucide-react";
 import { billingApi } from "../../pages/ProjectBilling/billingMeta";
 import { toast } from "../../utils/toast";
 import { useRise, useNewMessage } from "../../utils/ding";
-import { useLive, every } from "../../utils/live";
+import { useLive, every, useTyping, sayTyping, typingText, myAdminName, myAdminWho } from "../../utils/live";
+import { Tick } from "../Tick";
 import "./TeamChat.css";
 
 // Floating team chat in the CRM: the admin joins the Employee Portal group channels
@@ -28,6 +30,8 @@ export default function TeamChat() {
   const [tick, setTick] = useState(0);
   const [off, setOff] = useState(false);
   const end = useRef(null);
+  const typingIn = useTyping((d) => (d.chat === "team" && d.who !== myAdminWho() ? { chat: d.channel, person: d.who } : null));
+  const tp = cur ? typingIn(cur.id) : [];
   useRise(unread, "msg");                 // sound for new team messages
   useNewMessage(msgs, cur?.id, mine);
 
@@ -50,6 +54,24 @@ export default function TeamChat() {
   // a new message in a group: reload straight away
   useLive("team", () => setTick(x => x + 1));
   useEffect(() => { const b = end.current?.parentElement; if (b) b.scrollTop = b.scrollHeight; }, [msgs.length, cur]);
+  // Closing always goes back to the chat list, so the chat opens fresh next time.
+  // A click anywhere outside the chat closes it; Esc goes back to the list, then closes.
+  const root = useRef(null);
+  const close = () => { setOpen(false); setCur(null); setMsgs([]); setText(""); };
+  const back = () => { setCur(null); setTick(x => x + 1); };
+  const closeRef = useRef(close), backRef = useRef(back);
+  useEffect(() => { closeRef.current = close; backRef.current = back; });
+  const hasCur = !!cur;
+  useEffect(() => {
+    if (!open) return undefined;
+    const down = (e) => { if (root.current && !root.current.contains(e.target)) closeRef.current(); };
+    const key = (e) => { if (e.key === "Escape") (hasCur ? backRef.current : closeRef.current)(); };
+    document.addEventListener("mousedown", down);
+    document.addEventListener("touchstart", down);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("mousedown", down); document.removeEventListener("touchstart", down); document.removeEventListener("keydown", key); };
+  }, [open, hasCur]);
+
 
   if (off) return null;
   // The message shows straight away; it is swapped for the saved one when the server answers
@@ -67,20 +89,20 @@ export default function TeamChat() {
   };
 
   return (
-    <div className={`nnc-tc ${open ? "open" : ""}`}>
+    <div className={`nnc-tc ${open ? "open" : ""}`} ref={root}>
       {open && (
         <div className="nnc-tc-panel" role="dialog" aria-label="Team chat">
           <div className="nnc-tc-h">
-            {cur && <button type="button" className="nnc-tc-ib" onClick={() => { setCur(null); setTick(x => x + 1); }} aria-label="Back"><ArrowLeft size={17} /></button>}
+            {cur && <button type="button" className="nnc-tc-back" onClick={back} aria-label="Back to all chats" title="Back to all chats (Esc)"><ArrowLeft size={16} /><span>All chats</span></button>}
             <div className="nnc-tc-ht"><b>{cur ? cur.name : "Team chat"}</b><span>{cur ? "Everyone in this group can read it" : "Employee Portal groups"}</span></div>
-            <button type="button" className="nnc-tc-ib" onClick={() => setOpen(false)} aria-label="Close chat"><X size={17} /></button>
+            <button type="button" className="nnc-tc-ib" onClick={close} aria-label="Close chat" title="Close (click outside or Esc)"><X size={17} /></button>
           </div>
           {!cur ? (
             <div className="nnc-tc-list">
               {chans.map(c => (
                 <button key={c.id} type="button" className={`nnc-tc-row ${c.unread ? "un" : ""}`} onClick={() => { setMsgs([]); setCur(c); }}>
                   <span className="nnc-tc-av grp"><Hash size={15} /></span>
-                  <span className="nnc-tc-rx"><b>{c.name}</b><span>{c.last ? `${c.last.name}: ${c.last.text}` : "No messages yet"}</span></span>
+                  <span className="nnc-tc-rx"><b>{c.name}</b>{typingIn(c.id).length ? <span className="row-typing">{typingText(typingIn(c.id))}</span> : <span>{c.last ? `${c.last.name}: ${c.last.text}` : "No messages yet"}</span>}</span>
                   <span className="nnc-tc-rm">{c.last && <small>{tm(c.last.at)}</small>}{c.unread > 0 && <em>{c.unread}</em>}</span>
                 </button>
               ))}
@@ -97,16 +119,17 @@ export default function TeamChat() {
                       {!m.mine && <span className="nnc-tc-av" style={{ background: R[1], visibility: first ? "visible" : "hidden" }}>{ini(m.name)}</span>}
                       <div className="nnc-tc-bub">
                         {first && !m.mine && <b className="nnc-tc-who">{m.name} <span>{R[0]}</span></b>}
-                        <span className="nnc-tc-txt">{m.text}</span>
-                        <small>{m.pending ? "sending…" : tm(m.createdAt)}</small>
+                        <span className="nnc-tc-txt"><Linkify text={m.text} /></span>
+                        <small>{tm(m.createdAt)}{m.mine && <Tick pending={m.pending} seen={m.seenBy > 0} title={m.seenBy > 0 ? `Seen by ${m.seenBy}` : "Sent"} />}{m.mine && m.seenBy > 0 && <span className="tick-n">{m.seenBy}</span>}</small>
                       </div>
                     </div>
                   );
                 })}
                 <div ref={end} />
               </div>
+              {tp.length > 0 && <div className="typing" aria-live="polite"><i><b /><b /><b /></i>{typingText(tp)}</div>}
               <form className="nnc-tc-f" onSubmit={send}>
-                <textarea rows={1} value={text} onChange={e => setText(e.target.value)} placeholder={`Message ${cur.name}…`} aria-label="Message"
+                <textarea rows={1} value={text} onChange={e => { setText(e.target.value); if (e.target.value) sayTyping({ chat: "team", channel: cur.id, name: myAdminName() }); }} placeholder={`Message ${cur.name}…`} aria-label="Message"
                   onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(e); } }} />
                 <button className="nnc-tc-send" disabled={busy || !text.trim()} aria-label="Send"><Send size={16} /></button>
               </form>
@@ -114,7 +137,7 @@ export default function TeamChat() {
           )}
         </div>
       )}
-      <button type="button" className={`nnc-tc-fab${unread > 0 ? " has-new" : ""}`} onClick={() => setOpen(o => !o)} title="Team chat" aria-label={`Team chat${unread ? `, ${unread} unread` : ""}`}>
+      <button type="button" className={`nnc-tc-fab${unread > 0 ? " has-new" : ""}`} onClick={() => (open ? close() : setOpen(true))} title="Team chat" aria-label={`Team chat${unread ? `, ${unread} unread` : ""}`}>
         {open ? <X size={20} /> : <MessageSquareText size={20} />}
         {unread > 0 && !open && <em>{unread > 99 ? "99+" : unread}</em>}
       </button>

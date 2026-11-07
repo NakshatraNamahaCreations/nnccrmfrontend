@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff, UserPlus, Pencil, FolderKanban, ChevronRight } from "lucide-react";
+import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff, UserPlus, Pencil, FolderKanban, ChevronRight, CheckCircle2, Circle } from "lucide-react";
+import Linkify from "../../components/Linkify";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import { billingApi, API } from "../ProjectBilling/billingMeta";
@@ -28,8 +29,10 @@ const TY = {
   backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign change", negative: "Negative keywords", newad: "New ad or campaign",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
   poster: "Poster or creative", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
+  webcontent: "Website content", blogcontent: "Blog content written", landing: "Landing page content", campaign: "Campaign setup",
+  social: "Social media posts scheduled", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
 };
-const TABS = [["people", "Employees"], ["messages", "Messages"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
+const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
 const RANGES = [["today", "Today", 0], ["week", "Last 7 days", -6], ["month", "Last 30 days", -29]];
 
 const h1 = (n) => Math.round((n || 0) * 10) / 10;
@@ -42,6 +45,8 @@ function metaTxt(e) {
   if (m.pass != null) o.push(`${m.pass} passed, ${m.fail} failed`); if (m.bug) o.push(`${m.bug}${m.sev ? ` · ${m.sev}` : ""}${m.assignName ? ` · to ${m.assignName}` : ""}${m.status ? ` · ${m.status}` : ""}`);
   if (m.amt) o.push(`₹${(+m.amt).toLocaleString("en-IN")}`); if (m.spend != null && e.type === "adsreport") o.push(`₹${(+m.spend).toLocaleString("en-IN")} spent · ${m.conv || 0} leads`);
   if (m.mod) o.push(m.mod); if (m.terms) o.push(m.terms);
+  if (m.pages) o.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) o.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
+  if (m.kws) o.push(`${m.kws} keywords`); if (m.month) o.push(m.month);
   return o.join(" · ");
 }
 
@@ -120,6 +125,7 @@ export default function EmployeePortal() {
           <>
             {tab === "people" && <People A={A} />}
             {tab === "messages" && <PortalChat onUnread={setUnread} />}
+            {tab === "plans" && <Plans accounts={A.data || []} />}
             {tab === "today" && <Work accounts={A.data || []} today />}
             {tab === "work" && <Work accounts={A.data || []} />}
             {tab === "meetings" && <Meetings />}
@@ -609,6 +615,76 @@ function Tasks({ accounts }) {
               <td>{t.from}</td></tr>
           )) : <tr><td colSpan={6}><div className="empty">No tasks here.</div></td></tr>}</tbody></table></div></div>
       {assign && <AssignTask accounts={accounts.filter(a => a.status === "active")} init={{}} onClose={() => setAssign(false)} onDone={() => { setAssign(false); Tk.reload(); }} />}
+    </>
+  );
+}
+
+/* ───────── Plans for today ───────── */
+// What each employee planned for the day in the portal, and how much of it is ticked off
+function Plans({ accounts }) {
+  const [date, setDate] = useState(T(0));
+  const [team, setTeam] = useState("all");
+  const [q, setQ] = useState("");
+  const D = useGet(`/plans?date=${date}`);
+  const inTeam = (a) => team === "all" || anyRole(a, TEAMS[team][1]);
+  const match = (a) => !q.trim() || String(a?.name || "").toLowerCase().includes(q.trim().toLowerCase());
+  const withItems = (D.data?.plans || []).filter(p => p.items.length);
+  const shown = withItems.filter(p => inTeam(p.account) && match(p.account));
+  const has = new Set(withItems.map(p => String(p.account._id)));
+  const missing = accounts.filter(a => a.status === "active" && !has.has(a.id) && inTeam(a) && match(a));
+  const items = shown.flatMap(p => p.items), done = items.filter(i => i.done).length;
+  const tm = (d) => (d ? new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" }) : "");
+  const isToday = date === T(0);
+  return (
+    <>
+      <div className="kpis">
+        <div className="kpi"><span className="l">Employees with a plan</span><span className="v">{shown.length}</span></div>
+        <div className="kpi"><span className="l">Plans</span><span className="v">{items.length}</span></div>
+        <div className="kpi"><span className="l">Done</span><span className="v ok">{done}</span></div>
+        <div className="kpi"><span className="l">{isToday ? "Not added yet" : "No plan that day"}</span><span className="v amb">{missing.length}</span></div>
+      </div>
+      <div className="filters ep-mfil">
+        <label>Day <input type="date" value={date} max={T(0)} onChange={e => e.target.value && setDate(e.target.value)} /></label>
+        {!isToday && <button type="button" className="btn sm" onClick={() => setDate(T(0))}>Today</button>}
+        {Object.entries(TEAMS).map(([k, [t]]) => <button key={k} type="button" className={`chip ${team === k ? "on" : ""}`} onClick={() => setTeam(k)}>{t}</button>)}
+        <input type="search" placeholder="Search employee" value={q} onChange={e => setQ(e.target.value)} aria-label="Search employee" />
+      </div>
+      {D.loading ? <div className="card"><div className="empty">Loading…</div></div>
+        : D.err ? <div className="card"><div className="empty err">{D.err}</div></div> : (
+        <>
+          {shown.length ? (
+            <div className="ep-plans">
+              {shown.map(p => {
+                const n = p.items.filter(i => i.done).length;
+                return (
+                  <section key={p._id} className="card ep-plan">
+                    <div className="ep-plan-h">
+                      <Av name={p.account.name} role={p.account.role} />
+                      <div className="nm"><b>{p.account.name}</b><span className="sub">{roleNames(p.account)}{p.account.branch ? ` · ${p.account.branch}` : ""}</span></div>
+                      <span className={`pill ${n === p.items.length ? "p-ok" : "p-other"}`}>{n} of {p.items.length} done</span>
+                    </div>
+                    <div className="ep-plan-bar"><i style={{ width: `${Math.round((n / p.items.length) * 100)}%` }} /></div>
+                    <ul>
+                      {p.items.map(i => (
+                        <li key={i._id} className={i.done ? "done" : ""}>
+                          {i.done ? <CheckCircle2 size={16} color="#16a34a" /> : <Circle size={16} color="#94a3b8" />}
+                          <span className="t"><Linkify text={i.text} />{i.refName && <span className="sub">{i.refName}</span>}</span>
+                          {i.done && i.doneAt && <span className="sub when">{tm(i.doneAt)}</span>}
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="sub ep-plan-f">Last change {tm(p.updatedAt)}</p>
+                  </section>
+                );
+              })}
+            </div>
+          ) : <div className="card" style={{ marginBottom: 14 }}><div className="empty">{withItems.length ? "No plans match these filters." : isToday ? "No employee has added a plan for today yet." : "No plans were added that day."}</div></div>}
+          {missing.length > 0 && (
+            <div className="card"><h3>{isToday ? "Not added a plan yet" : "No plan that day"} <small>{missing.length}</small></h3>
+              <div className="ep-miss">{missing.map(a => <span key={a.id}>{a.name}</span>)}</div></div>
+          )}
+        </>
+      )}
     </>
   );
 }

@@ -3,7 +3,7 @@
 import { billingApi } from "../pages/ProjectBilling/billingMeta";
 
 const KEY = "nnc_portal_seen";
-const SEEN_TABS = ["work", "meetings", "docs", "tasks"];
+const SEEN_TABS = ["work", "meetings", "docs", "tasks", "plans"];
 
 export function getSeen() {
   try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch { return {}; }

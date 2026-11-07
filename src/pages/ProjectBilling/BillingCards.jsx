@@ -26,6 +26,14 @@ function PaymentList({ payments, onDelete, canEdit }) {
 }
 
 /* ── One additional-work item ────────────────────────────────────────────── */
+// The business name first (in bold), then the client's name
+const bizOf = (l) => String(l?.business || l?.company || "").trim();
+function ProjectName({ lead }) {
+  const biz = bizOf(lead);
+  if (!lead?.name && !biz) return null;
+  return <>{biz ? <><b className="bill-biz">{biz}</b>{lead.name && lead.name !== biz ? ` (${lead.name})` : ""}</> : lead.name} · </>;
+}
+
 export function ExtraCard({ item, canEdit, showProject, onChange, onEdit, onDelete }) {
   const [paying, setPaying] = useState(false);
   const st = EXTRA_STATUS[item.status] || EXTRA_STATUS.quoted;
@@ -55,7 +63,7 @@ export function ExtraCard({ item, canEdit, showProject, onChange, onEdit, onDele
             <span className={`intg-badge ${st.cls}`}>{st.label}</span>
           </div>
           <div className="intg-card-sub">
-            {showProject && item.lead?.name ? `${item.lead.name} · ` : ""}Requested {fmtDate(item.requestedDate)}
+            {showProject && <ProjectName lead={item.lead} />}Requested {fmtDate(item.requestedDate)}
           </div>
         </div>
         {canEdit && (
@@ -137,7 +145,7 @@ export function ServiceCard({ item, canEdit, showProject, onChange, onEdit, onDe
             {cur && <span className={`intg-badge ${MONTH_STATUS[cur.status].cls}`}>{monthLabel(cur.period)}: {MONTH_STATUS[cur.status].label}</span>}
           </div>
           <div className="intg-card-sub">
-            {showProject && item.lead?.name ? `${item.lead.name} · ` : ""}
+            {showProject && <ProjectName lead={item.lead} />}
             <strong>{inr(item.monthlyTotal)}</strong>/month{item.gstApplicable ? ` (incl. ${item.gstRate}% GST)` : ""} · bill on {item.billingDay}th
             · since {fmtDate(item.startDate)}{item.endDate ? ` · ends ${fmtDate(item.endDate)}` : ""}
           </div>

@@ -92,3 +92,34 @@
 .ep-mfil input[type="search"] { flex: 1 1 240px; min-width: 0; }
 .ep-mfil input, .ep-mfil select { border: 1px solid #e2e8f0; border-radius: 9px; padding: 8px 10px; font: inherit; font-size: 13px; background: #fff; }
 .ep-mfil label { display: inline-flex; gap: 6px; align-items: center; font-size: 13px; color: #64748b; }
+
+/* links inside messages and bug notes */
+.lnk { color: inherit; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; font-weight: 600; }
+
+/* Plans for today */
+.ep-plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.ep-plan-h { display: flex; gap: 10px; align-items: center; padding: 13px 16px 10px; }
+.ep-plan-h .nm { flex: 1; min-width: 0; }
+.ep-plan-h .nm b { display: block; color: var(--navy); }
+.ep-plan-bar { height: 5px; background: #eef2f7; border-radius: 4px; overflow: hidden; margin: 0 16px; }
+.ep-plan-bar i { display: block; height: 100%; background: #16a34a; }
+.ep-plan ul { list-style: none; margin: 0; padding: 10px 16px 4px; }
+.ep-plan li { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 13.5px; }
+.ep-plan li svg { flex: none; margin-top: 2px; }
+.ep-plan li .t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.ep-plan li.done .t { color: #64748b; text-decoration: line-through; }
+.ep-plan li .when { white-space: nowrap; }
+.ep-plan-f { padding: 0 16px 12px; margin: 0; }
+.ep-miss { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; }
+.ep-miss span { background: #fef3c7; color: #92400e; border-radius: 999px; padding: 4px 10px; font-size: 12.5px; }
+
+/* chat ticks and typing */
+.tick { display: inline-flex; vertical-align: -2px; margin-left: 4px; opacity: .8; }
+.tick.seen { color: #7DD3FC; opacity: 1; }
+.typing { font-size: 12px; color: #64748b; font-style: italic; padding: 2px 14px 6px; min-height: 18px; display: flex; align-items: center; gap: 6px; }
+.typing i { display: inline-flex; gap: 3px; }
+.typing i b { width: 5px; height: 5px; border-radius: 99px; background: #94a3b8; animation: typing-dot 1.2s infinite ease-in-out; }
+.typing i b:nth-child(2) { animation-delay: .15s; }
+.typing i b:nth-child(3) { animation-delay: .3s; }
+@keyframes typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
+.row-typing { color: #16a34a !important; font-style: italic; }

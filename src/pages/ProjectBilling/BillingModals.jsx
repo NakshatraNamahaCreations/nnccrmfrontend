@@ -35,14 +35,16 @@ function Modal({ title, sub, onClose, onSubmit, saving, submitLabel, children })
 function ProjectPicker({ value, onChange }) {
   const [projects, setProjects] = useState([]);
   useEffect(() => {
-    fetchProjects().then(setProjects).catch(() => toast.error("Could not load projects"));
+    // listed by business name (what people recognise), with the client's name after it
+    fetchProjects().then(L => setProjects([...L].sort((a, b) => String(a.business || a.name).localeCompare(String(b.business || b.name)))))
+      .catch(() => toast.error("Could not load projects"));
   }, []);
   return (
     <div className="intg-field">
       <label>Project *</label>
       <select value={value} onChange={e => onChange(e.target.value, projects.find(p => p._id === e.target.value))} required>
         <option value="">{projects.length ? "Select a project…" : "Loading projects…"}</option>
-        {projects.map(p => <option key={p._id} value={p._id}>{p.name}{p.business ? ` — ${p.business}` : ""}</option>)}
+        {projects.map(p => <option key={p._id} value={p._id}>{p.business ? `${p.business} — ${p.name}` : p.name}</option>)}
       </select>
     </div>
   );
