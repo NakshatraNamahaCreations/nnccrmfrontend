@@ -26,11 +26,12 @@ const SEO_ROLES = ["seo", "seox", "ads", "gfx"];                             // 
 const DEPTS = ["Development", "Design", "Testing", "Digital Marketing", "Accounts"];
 const BRANCHES = ["Bangalore", "Mysore", "Mumbai"];
 const TY = {
-  backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign change", negative: "Negative keywords", newad: "New ad or campaign",
+  backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign or ad changes", negative: "Negative keywords", newad: "New ad or ad group",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
   poster: "Poster or creative", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
   webcontent: "Website content", blogcontent: "Blog content written", landing: "Landing page content", campaign: "Campaign setup",
-  social: "Social media posts scheduled", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
+  social: "Social media posts", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
+  kwresearch: "Keyword research", metaads: "Meta Ads",
 };
 const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
 const RANGES = [["today", "Today", 0], ["week", "Last 7 days", -6], ["month", "Last 30 days", -29]];
@@ -47,7 +48,15 @@ function metaTxt(e) {
   if (m.mod) o.push(m.mod); if (m.terms) o.push(m.terms);
   if (m.pages) o.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) o.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
   if (m.kws) o.push(`${m.kws} keywords`); if (m.month) o.push(m.month);
+  if (m.files?.length) o.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return o.join(" · ");
+}
+
+// Screenshots, videos or files attached to a logged piece of work
+function WorkFiles({ e }) {
+  const L = e.meta?.files || [];
+  if (!L.length) return null;
+  return <span className="ep-wfiles">{L.map(f => <a key={f.url} href={/^https?:/.test(f.url) ? f.url : `${API}${f.url}`} target="_blank" rel="noopener noreferrer" title={f.name}>{f.name}</a>)}</span>;
 }
 
 function Modal({ title, onClose, children, wide }) {
@@ -462,7 +471,7 @@ function Work({ accounts, today }) {
                 <span className="d">{today ? <Av name={acc(e.account)?.name} role={acc(e.account)?.role} /> : fd(e.date)}</span>
                 <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
                   <span className="sub">{[acc(e.account)?.name, e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
-                  {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}</span>
+                  {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}<WorkFiles e={e} /></span>
                 <span className="num">{h1(e.hrs)} h</span>
               </div>
             ))}</div>
@@ -535,7 +544,7 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
               <div key={e._id}>
                 <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
                   <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
-                  {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}</span>
+                  {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}<WorkFiles e={e} /></span>
                 <span className="num">{h1(e.hrs)} h</span>
               </div>
             ))}{!L.length && <div className="empty">Nothing logged.</div>}</div>

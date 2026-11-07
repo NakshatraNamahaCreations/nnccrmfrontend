@@ -123,3 +123,8 @@
 .typing i b:nth-child(3) { animation-delay: .3s; }
 @keyframes typing-dot { 0%, 60%, 100% { transform: translateY(0); opacity: .5; } 30% { transform: translateY(-3px); opacity: 1; } }
 .row-typing { color: #16a34a !important; font-style: italic; }
+
+/* attachments on logged work */
+.ep-wfiles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+.ep-wfiles a { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: #EEF3FF; color: #2563EB; text-decoration: none; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ep-wfiles a:hover { text-decoration: underline; }
