@@ -34,7 +34,34 @@ const TY = {
   kwresearch: "Keyword research", metaads: "Meta Ads", tracking: "GSC / GA4 / GTM setup",
 };
 const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
-const RANGES = [["today", "Today", 0], ["week", "Last 7 days", -6], ["month", "Last 30 days", -29]];
+const RANGES = [["today", "Today"], ["week", "Last 7 days"], ["month", "Last 30 days"], ["thism", "This month"], ["lastm", "Last month"], ["custom", "Custom dates"]];
+// from and to (YYYY-MM-DD) for a range; custom uses the dates picked
+function rangeDays(k, cf, ct) {
+  const t = T(0), y = +t.slice(0, 4), m = +t.slice(5, 7);
+  const ym = (yy, mm) => `${yy}-${String(mm).padStart(2, "0")}`;
+  if (k === "week") return [T(-6), t];
+  if (k === "month") return [T(-29), t];
+  if (k === "thism") return [`${ym(y, m)}-01`, t];
+  if (k === "lastm") { const py = m === 1 ? y - 1 : y, pm = m === 1 ? 12 : m - 1; return [`${ym(py, pm)}-01`, `${ym(py, pm)}-${String(new Date(py, pm, 0).getDate()).padStart(2, "0")}`]; }
+  if (k === "custom" && cf && ct) return cf <= ct ? [cf, ct] : [ct, cf];
+  return [t, t];
+}
+// "18:26" → "6:26 pm" (the time a day was submitted is kept as 24-hour text)
+const ampm = (s) => {
+  const x = /^(\d{1,2}):(\d{2})/.exec(String(s || ""));
+  if (!x) return s || "";
+  const h = +x[1];
+  return `${h % 12 || 12}:${x[2]} ${h < 12 ? "am" : "pm"}`;
+};
+// Download rows as a CSV file that opens in Excel
+function downloadCsv(name, rows) {
+  const esc = (v) => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const blob = new Blob(["\uFEFF" + rows.map(r => r.map(esc).join(",")).join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
 
 const h1 = (n) => Math.round((n || 0) * 10) / 10;
 const dayOf = (d) => (d ? String(new Date(d).toISOString()).slice(0, 10) : "");
@@ -196,10 +223,11 @@ function People({ A }) {
         <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => { setF(k); setPage(0); }}>{t}</button>
       ))}<span className="sp" /><button type="button" className="btn pri" onClick={() => setAdding(true)}><UserPlus size={14} /> Add employee</button></div>
       <div className="card"><div className="tw"><table>
-        <thead><tr><th>Employee</th><th>Role</th><th>Contact</th><th>Branch</th><th>Works on</th><th>Last sign in</th><th>Status</th><th /></tr></thead>
+        <thead><tr><th className="n" style={{ width: 48 }}>Sl no</th><th>Employee</th><th>Role</th><th>Contact</th><th>Branch</th><th>Works on</th><th>Last sign in</th><th>Status</th><th /></tr></thead>
         <tbody>
-          {A.loading ? <tr><td colSpan={8}><div className="empty">Loading…</div></td></tr> : shown.length ? shown.map(a => (
+          {A.loading ? <tr><td colSpan={9}><div className="empty">Loading…</div></td></tr> : shown.length ? shown.map((a, i) => (
             <tr key={a.id}>
+              <td className="n sub">{cur * per + i + 1}</td>
               <td><div className="ep-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">joined {fd(dayOf(a.created))}</span></span></div></td>
               <td><Role a={a} /></td>
               <td>{a.email}<span className="sub">{a.phone}</span></td>
@@ -223,7 +251,7 @@ function People({ A }) {
                 <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${a.name}`} onClick={() => setAsk({ kind: "delete", a })}><Trash2 size={13} /></button>
               </td>
             </tr>
-          )) : <tr><td colSpan={8}><div className="empty">{L.length ? "Nobody in this list." : "No employees yet. When someone creates an account in the Employee Portal, they appear here to approve."}</div></td></tr>}
+          )) : <tr><td colSpan={9}><div className="empty">{L.length ? "Nobody in this list." : "No employees yet. When someone creates an account in the Employee Portal, they appear here to approve."}</div></td></tr>}
         </tbody>
       </table></div>
         {all.length > 10 && <Pager total={all.length} page={cur} per={per} onPage={setPage} onPer={setPer} sizes={[10, 25, 50]} label="employees" />}
@@ -417,12 +445,14 @@ function attTxt(L) {
 
 function Work({ accounts, today }) {
   const [rg, setRg] = useState(today ? "today" : "week");
+  const [cf, setCf] = useState(T(-6)), [ct, setCt] = useState(T(0));   // custom dates
   const [team, setTeam] = useState("all");
   const [who, setWho] = useState("");
   const [assign, setAssign] = useState(null);
   const [person, setPerson] = useState(null);   // Work log: the employee whose work is open
-  const from = T(RANGES.find(r => r[0] === (today ? "today" : rg))[2]);
-  const W = useGet(`/work?from=${from}&to=${T(0)}`);
+  const [from, to] = rangeDays(today ? "today" : rg, cf, ct);
+  const period = rg === "custom" ? (from === to ? fd(from) : `${fd(from)} to ${fd(to)}`) : RANGES.find(r => r[0] === rg)[1];
+  const W = useGet(`/work?from=${from}&to=${to}`);
   const d = W.data || { accounts: [], work: [], days: [], blockers: [], attendance: [] };
   const roles = TEAMS[team][1];
   const accs = d.accounts.filter(a => !roles || anyRole(a, roles));
@@ -440,14 +470,36 @@ function Work({ accounts, today }) {
   }).sort((x, y) => y.hrs - x.hrs);
   const resolve = async (id) => { try { await papi(`/blockers/${id}/resolve`, { method: "PUT" }); toast.success("Marked as sorted"); W.reload(); } catch (ex) { toast.error(ex.message); } };
   const tw = work.filter(w => w.date === T(0));
+  // Excel (CSV) of the work log for this period: every item, then each person's total
+  const exportLog = () => {
+    const att = (id, dt) => (d.attendance || []).find(x => String(x.account) === id && x.date === dt)?.sessions || [];
+    const rows = [["Date", "Employee", "Role", "Work type", "Title", "Project / client", "Details", "Hours", "Extra work", "Link", "Check in", "Check out", "Day submitted at"]];
+    [...work].sort((x, y) => (x.date === y.date ? (acc(x.account)?.name || "").localeCompare(acc(y.account)?.name || "") : x.date < y.date ? -1 : 1)).forEach(e => {
+      const id = String(e.account), a = acc(id), S = att(id, e.date), last = [...S].reverse().find(x => x.out);
+      const day = days.find(x => String(x.account) === id && x.date === e.date);
+      rows.push([e.date, a?.name || "", roleNames(a || {}), TY[e.type] || e.type, e.title, e.refName || "", metaTxt(e), h1(e.hrs), e.meta?.extra ? "Yes" : "", e.url || "",
+        S[0] ? tm(S[0].in) : "", last ? tm(last.out) : "", day ? ampm(day.at) : ""]);
+    });
+    rows.push([], ["Summary", period], ["Employee", "Role", "Items", "Hours", "Extra hours", "Days submitted"]);
+    per.filter(p => !who || p.a.id === who).forEach(p => rows.push([p.a.name, roleNames(p.a), p.n, h1(p.hrs), h1(p.extra), p.sub]));
+    downloadCsv(`work-log_${from}_to_${to}.csv`, rows);
+  };
 
   return (
     <>
       <div className="filters">
-        {!today && RANGES.map(([k, l]) => <button key={k} type="button" className={`chip ${rg === k ? "on" : ""}`} onClick={() => setRg(k)}>{l}</button>)}
+        {!today && RANGES.slice(1).map(([k, l]) => <button key={k} type="button" className={`chip ${rg === k ? "on" : ""}`} onClick={() => setRg(k)}>{l}</button>)}
+        {!today && rg === "custom" && (
+          <span className="ep-dates">
+            <input type="date" value={cf} max={T(0)} onChange={e => e.target.value && setCf(e.target.value)} aria-label="From" />
+            <span className="sub">to</span>
+            <input type="date" value={ct} max={T(0)} onChange={e => e.target.value && setCt(e.target.value)} aria-label="To" />
+          </span>
+        )}
         <select value={team} onChange={e => { setTeam(e.target.value); setWho(""); }} aria-label="Team">{Object.entries(TEAMS).map(([k, [l]]) => <option key={k} value={k}>{l}</option>)}</select>
         <select value={who} onChange={e => setWho(e.target.value)} aria-label="Employee"><option value="">All employees</option>{accs.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select>
         <span className="sp" />
+        {!today && <button type="button" className="btn" disabled={W.loading || !work.length} onClick={exportLog} title="Download this work log as an Excel (CSV) file">Export</button>}
         <button type="button" className="btn pri" disabled={!active.length} onClick={() => setAssign({ account: who })}>Assign a task</button>
       </div>
       {W.err && <div className="card"><div className="empty err">{W.err}</div></div>}
@@ -480,7 +532,7 @@ function Work({ accounts, today }) {
             ))}</div>
           ) : <div className="empty">Nothing logged {today ? "today yet" : "in this period"}.</div>}
         </div>
-        <div className="card"><h3>By person <small>{today ? "today" : RANGES.find(r => r[0] === rg)[1].toLowerCase()}</small></h3>
+        <div className="card"><h3>By person <small>{today ? "today" : period.toLowerCase()}</small></h3>
           {per.length ? (
             <div className="ll flat">{per.map(p => (
               <div key={p.a.id}>
@@ -489,14 +541,14 @@ function Work({ accounts, today }) {
                   {p.att?.sessions?.length > 0 && <span className="sub">{attTxt(p.att.sessions)}</span>}
                   {p.day && (p.day.note || p.day.plan) && <span className="sub">{p.day.note}{p.day.plan ? ` · Tomorrow: ${p.day.plan}` : ""}</span>}</span>
                 <span className="num">{h1(p.hrs)} h</span>
-                {p.day ? <span className="pill p-ok">Day sent {p.day.at}</span> : <span className="pill p-amb">Today open</span>}
+                {p.day ? <span className="pill p-ok">Day sent {ampm(p.day.at)}</span> : <span className="pill p-amb">Today open</span>}
               </div>
             ))}</div>
           ) : <div className="empty">No active employees in this team yet.</div>}
         </div>
       </div>
       ) : (
-        <div className="card"><h3>People <small>{RANGES.find(r => r[0] === rg)[1].toLowerCase()} · click a person to see all their work</small></h3>
+        <div className="card"><h3>People <small>{rg === "custom" ? period : period.toLowerCase()} · click a person to see all their work</small></h3>
           {W.loading ? <div className="empty">Loading…</div> : per.length ? (
             <div className="tw"><table className="ep-people">
               <thead><tr><th>Employee</th><th>Check in today</th><th>Check out today</th><th className="n">Items</th><th className="n">Days submitted</th><th className="n">Hours</th><th>Today</th><th /></tr></thead>
@@ -511,7 +563,7 @@ function Work({ accounts, today }) {
                     <td className="n">{p.n}</td>
                     <td className="n">{p.sub}</td>
                     <td className="n"><b>{h1(p.hrs)} h</b>{p.extra > 0 && <span className="sub">{h1(p.extra)} h extra</span>}</td>
-                    <td>{p.day ? <span className="pill p-ok">Sent {p.day.at}</span> : <span className="pill p-amb">Open</span>}</td>
+                    <td>{p.day ? <span className="pill p-ok">Sent {ampm(p.day.at)}</span> : <span className="pill p-amb">Open</span>}</td>
                     <td className="r"><button type="button" className="btn sm" onClick={(e) => { e.stopPropagation(); setPerson(p.a.id); }}>View <ChevronRight size={14} /></button></td>
                   </tr>
                 );
@@ -521,7 +573,7 @@ function Work({ accounts, today }) {
         </div>
       )}
       {person && <PersonWork a={acc(person)} work={work.filter(w => String(w.account) === person)} days={days.filter(x => String(x.account) === person)}
-        attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={RANGES.find(r => r[0] === rg)[1]} onClose={() => setPerson(null)} />}
+        attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={period} onClose={() => setPerson(null)} />}
       {assign && <AssignTask accounts={accounts.filter(a => a.status === "active" && (!roles || anyRole(a, roles)))} init={assign} onClose={() => setAssign(null)} onDone={() => setAssign(null)} />}
     </>
   );
@@ -541,7 +593,7 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
           <div key={dt} className="ep-pday">
             <div className="ep-pday-h"><b>{fd(dt)}</b>
               <span className="sub">{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h · {L.length} items{att?.sessions?.length ? ` · ${attTxt(att.sessions)}` : ""}</span>
-              {day ? <span className="pill p-ok">Sent {day.at}</span> : <span className="pill p-amb">Not submitted</span>}</div>
+              {day ? <span className="pill p-ok">Sent {ampm(day.at)}</span> : <span className="pill p-amb">Not submitted</span>}</div>
             {day && (day.note || day.plan) && <div className="sub ep-pnote">{day.note}{day.plan ? `${day.note ? " · " : ""}Tomorrow: ${day.plan}` : ""}</div>}
             <div className="ll flat">{L.map(e => (
               <div key={e._id}>

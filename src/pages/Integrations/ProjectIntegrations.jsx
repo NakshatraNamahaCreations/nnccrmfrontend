@@ -108,6 +108,7 @@ export function IntegrationCard({ item, canEdit, onEdit, onDelete }) {
       )}
 
       {item.notes && <div className="intg-card-notes">{item.notes}</div>}
+      {item.addedBy && <div className="intg-card-notes" style={{ fontStyle: "normal", color: "#64748b" }}>Added by {item.addedBy}{item.updatedBy && item.updatedBy !== item.addedBy ? ` · last changed by ${item.updatedBy}` : ""}</div>}
     </div>
   );
 }

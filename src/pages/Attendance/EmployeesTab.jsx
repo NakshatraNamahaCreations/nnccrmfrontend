@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, RefreshCcw, Search, Edit2, UserX, Clock, Briefcase, Phone, Mail, X, TrendingUp, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, RefreshCcw, Search, Edit2, UserX, Clock, Briefcase, Phone, Mail, X, TrendingUp, ChevronDown, ChevronUp, CalendarDays, Cake, BadgeCheck } from "lucide-react";
 import { toast } from "../../utils/toast";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -31,6 +31,14 @@ function getInitials(name) {
   const parts = String(name || "?").trim().split(/\s+/);
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
   return `${parts[0]?.[0] || ""}${parts[1]?.[0] || ""}`.toUpperCase();
+}
+
+// Late only after 2 hours from the shift start (9:30 → 11:30), the same rule as the server
+function lateAt(emp) {
+  const [h, m] = String(emp.shiftStart || "09:30").split(":").map(Number);
+  const t = h * 60 + m + Math.max(120, Number(emp.gracePeriodMin) || 0);
+  const hh = Math.floor(t / 60) % 24, mm = t % 60;
+  return `${hh % 12 || 12}:${String(mm).padStart(2, "0")} ${hh < 12 ? "am" : "pm"}`;
 }
 
 function fmtSalary(n) {
@@ -220,13 +228,17 @@ export default function EmployeesTab({ branch }) {
       ) : (
         <div className="att-emp-grid">
           {filtered.map(emp => (
-            <div key={emp._id} className="att-emp-card">
+            <div key={emp._id} className={`att-emp-card ${emp.isActive === false ? "off" : ""}`}>
               <div className="att-emp-card-header">
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div className="att-emp-who">
                   <div className="att-emp-avatar">{getInitials(emp.name)}</div>
-                  <div>
-                    <div className="att-emp-card-name">{emp.name}</div>
-                    <span className="att-emp-card-id">{emp.employeeId}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="att-emp-card-name" title={emp.name}>{emp.name}</div>
+                    <div className="att-emp-tags">
+                      <span className="att-emp-card-id">{emp.employeeId}</span>
+                      <span className={emp.isActive !== false ? "att-status-active" : "att-status-inactive"}>{emp.isActive !== false ? "Active" : "Inactive"}</span>
+                      <span className={`att-emp-type-badge ${emp.employmentType === "probationary" ? "probationary" : "permanent"}`}>{emp.employmentType === "probationary" ? "Probationary" : "Permanent"}</span>
+                    </div>
                   </div>
                 </div>
                 <span className={`att-branch-badge ${branchBadgeClass(emp.branch)}`}>{emp.branch}</span>
@@ -248,12 +260,12 @@ export default function EmployeesTab({ branch }) {
                 {emp.email && (
                   <div className="att-emp-info-row">
                     <Mail size={12} />
-                    <span style={{ fontSize: 11 }}>{emp.email}</span>
+                    <span className="att-emp-mail" title={emp.email}>{emp.email}</span>
                   </div>
                 )}
                 <div className="att-emp-info-row">
                   <Clock size={12} />
-                  <span>{emp.shiftStart || "09:30"} – {emp.shiftEnd || "18:30"} (Grace: {emp.gracePeriodMin || 15} min)</span>
+                  <span>{emp.shiftStart || "09:30"} – {emp.shiftEnd || "18:30"} · late after {lateAt(emp)}</span>
                 </div>
                 {emp.monthlySalary ? (
                   <div>
@@ -320,16 +332,14 @@ export default function EmployeesTab({ branch }) {
                     : `${daysWorking} day${daysWorking !== 1 ? "s" : ""}`;
                   const probationDone = emp.employmentType === "probationary" && daysWorking >= 180;
                   return (
-                    <div style={{ marginTop: 4 }}>
+                    <div>
                       <div className="att-emp-info-row">
-                        <span style={{ fontSize: 11, color: "#64748b" }}>
-                          📅 Joined {joined.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}
-                          &nbsp;·&nbsp;<strong style={{ color: "#0f172a" }}>{tenure}</strong>
-                        </span>
+                        <CalendarDays size={12} />
+                        <span>Joined {joined.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} · <strong style={{ color: "#0f172a" }}>{tenure}</strong></span>
                       </div>
                       {probationDone && (
                         <div className="att-probation-alert">
-                          🎉 Probation complete — eligible for permanent
+                          <BadgeCheck size={13} /> Probation complete. Eligible for permanent
                         </div>
                       )}
                     </div>
@@ -343,10 +353,10 @@ export default function EmployeesTab({ branch }) {
                     today.getMonth() < dob.getMonth() || (today.getMonth() === dob.getMonth() && today.getDate() < dob.getDate()) ? 1 : 0
                   );
                   return (
-                    <div style={{ marginTop: 4 }}>
+                    <div>
                       {isBday
-                        ? <div className="att-birthday-alert">🎂 Today is {emp.name?.split(" ")[0]}'s Birthday! ({age} years)</div>
-                        : <div className="att-emp-info-row"><span style={{ fontSize: 11, color: "#64748b" }}>🎂 DOB: {dob.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} · Age {age}</span></div>
+                        ? <div className="att-birthday-alert"><Cake size={13} /> Today is {emp.name?.split(" ")[0]}'s birthday ({age} years)</div>
+                        : <div className="att-emp-info-row"><Cake size={12} /><span>Born {dob.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} · Age {age}</span></div>
                       }
                     </div>
                   );
@@ -391,13 +401,7 @@ export default function EmployeesTab({ branch }) {
               )}
 
               <div className="att-emp-card-footer">
-                <span className={emp.isActive !== false ? "att-status-active" : "att-status-inactive"}>
-                  {emp.isActive !== false ? "Active" : "Inactive"}
-                </span>
-                <span className={`att-emp-type-badge ${emp.employmentType === "probationary" ? "probationary" : "permanent"}`}>
-                  {emp.employmentType === "probationary" ? "Probationary" : "Permanent"}
-                </span>
-                <div className="att-emp-actions">
+                <div className={`att-emp-actions n${emp.isActive !== false ? 3 : 1}`}>
                   {emp.isActive !== false && (
                     <button className="att-btn-ghost" style={{ color: "#059669" }} onClick={() => { setHikeOpen(emp._id); setHikeForm({ salary: "", effectiveDate: new Date().toISOString().split("T")[0], hikePct: "", remarks: "" }); }}>
                       <TrendingUp size={13} /> Hike

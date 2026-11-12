@@ -20,6 +20,15 @@ function authHeader() {
   const t = localStorage.getItem("nnc_token");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
+// check in / out are kept as the office clock in UTC: "2026-11-12T09:40:00Z" → "09:40"
+const hhmm = (v) => {
+  if (!v) return "";
+  if (/^\d{1,2}:\d{2}$/.test(v)) return v.padStart(5, "0");
+  const d = new Date(v);
+  return isNaN(d) ? "" : `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+};
+const ampm = (v) => { const t = hhmm(v); if (!t) return ""; const [h, m] = t.split(":").map(Number); return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "am" : "pm"}`; };
+const dur = (min) => { const h = Math.floor(min / 60), m = Math.round(min % 60); return h > 0 ? `${h}h ${m}m` : `${m}m`; };
 function nowHHMM() {
   const d = new Date();
   return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
@@ -47,11 +56,14 @@ export default function DailyTab({ branch }) {
 
   useEffect(() => { fetchDaily(); }, [fetchDaily]);
 
-  const save = async (empId, status, checkIn) => {
+  // status: send only to set it by hand; with just times, the server works out present / late / half day
+  const save = async (empId, status, checkIn, checkOut) => {
     setSaving(s => ({ ...s, [empId]: true }));
     try {
-      const body = { employeeId: empId, date: selectedDate, status };
+      const body = { employeeId: empId, date: selectedDate };
+      if (status) body.status = status;
       if (checkIn) body.checkIn = checkIn;
+      if (checkOut) body.checkOut = checkOut;
       const res  = await fetch(`${API}/api/attendance/mark`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeader() },
@@ -59,11 +71,7 @@ export default function DailyTab({ branch }) {
       });
       const json = await res.json();
       if (!res.ok || !json.success) { toast.error(json.message || "Save failed"); return; }
-      setRecords(prev => prev.map(r =>
-        r.employee?._id === empId
-          ? { ...r, attendance: { ...(r.attendance || {}), status, checkIn: checkIn || r.attendance?.checkIn } }
-          : r
-      ));
+      setRecords(prev => prev.map(r => (r.employee?._id === empId ? { ...r, attendance: json.data } : r)));
     } catch { toast.error("Save failed"); }
     finally { setSaving(s => { const n={...s}; delete n[empId]; return n; }); }
   };
@@ -72,16 +80,16 @@ export default function DailyTab({ branch }) {
     const empId   = rec.employee?._id;
     // Only keep existing checkIn — never auto-fill with current time.
     // If the status clears attendance (absent/leave/holiday), send no checkIn.
-    const checkIn = ["absent", "leave", "holiday"].includes(status)
-      ? undefined
-      : rec.attendance?.checkIn || undefined;
-    save(empId, status, checkIn);
+    const off = ["absent", "leave", "holiday"].includes(status);
+    save(empId, status, off ? undefined : hhmm(rec.attendance?.checkIn) || undefined, off ? undefined : hhmm(rec.attendance?.checkOut) || undefined);
   };
 
-  const handleTime = (rec, time) => {
-    const empId  = rec.employee?._id;
-    const status = rec.attendance?.status || "present";
-    save(empId, status, time);
+  // a typed time: the status follows the office timings
+  const handleTime = (rec, which, time) => {
+    const empId = rec.employee?._id, a = rec.attendance || {};
+    const inT = which === "in" ? time : hhmm(a.checkIn), outT = which === "out" ? time : hhmm(a.checkOut);
+    if (!inT) { toast.error("Enter the check-in time first"); return; }
+    save(empId, undefined, inT, outT || undefined);
   };
 
   const handleBulk = async (status) => {
@@ -162,8 +170,9 @@ export default function DailyTab({ branch }) {
                 <th>#</th>
                 <th>Employee</th>
                 <th>Status</th>
-                <th>Check-in Time</th>
-                <th>Late</th>
+                <th>Check in</th>
+                <th>Check out</th>
+                <th>Hours</th>
               </tr>
             </thead>
             <tbody>
@@ -224,30 +233,44 @@ export default function DailyTab({ branch }) {
                         <input
                           type="time"
                           className="att-time-input"
-                          value={att.checkIn || ""}
-                          disabled={isSaving || status === "absent" || status === "holiday" || status === "leave"}
-                          onChange={e => handleTime(rec, e.target.value)}
+                          value={hhmm(att.checkIn)}
+                          disabled={isSaving || status === "holiday" || status === "leave"}
+                          onChange={e => e.target.value && handleTime(rec, "in", e.target.value)}
                         />
-                        {(status === "present" || status === "late") && (
+                        {!att.checkIn && status !== "holiday" && status !== "leave" && (
                           <button
                             className="att-now-btn"
                             title="Set check-in to now"
                             disabled={isSaving}
-                            onClick={() => handleTime(rec, nowHHMM())}
+                            onClick={() => handleTime(rec, "in", nowHHMM())}
                           >
                             <Clock size={12} /> Now
                           </button>
                         )}
                       </div>
+                      {att.markedBy === "Employee Portal" && <div className="att-src">from the Employee Portal</div>}
                     </td>
 
-                    {/* Late — desktop only (hidden on mobile, shown inline in status cell) */}
+                    {/* Check-out time */}
+                    <td>
+                      <div className="att-td-time">
+                        <input
+                          type="time"
+                          className="att-time-input"
+                          value={hhmm(att.checkOut)}
+                          disabled={isSaving || !att.checkIn || status === "holiday" || status === "leave"}
+                          onChange={e => e.target.value && handleTime(rec, "out", e.target.value)}
+                        />
+                      </div>
+                      {att.checkIn && !att.checkOut && status !== "holiday" && status !== "leave" && <div className="att-src">still in</div>}
+                    </td>
+
+                    {/* Hours, extra time */}
                     <td className="att-late-desktop">
-                      {att.lateMinutes > 0 ? (() => {
-                        const h = Math.floor(att.lateMinutes / 60);
-                        const m = att.lateMinutes % 60;
-                        return <span className="att-late-tag">{h > 0 ? `${h}h ${m}m` : `${m}m`} late</span>;
-                      })() : <span style={{ color: "#cbd5e1" }}>—</span>}
+                      {att.workingHours > 0 ? <b>{dur(att.workingHours * 60)}</b> : <span style={{ color: "#cbd5e1" }}>—</span>}
+                      {att.overtimeMin > 0 && <div className="att-extra">+{dur(att.overtimeMin)} extra</div>}
+                      {att.earlyLeaveMin > 0 && <div className="att-src">left {dur(att.earlyLeaveMin)} early</div>}
+                      {att.checkIn && <div className="att-src">{ampm(att.checkIn)}{att.checkOut ? ` to ${ampm(att.checkOut)}` : ""}</div>}
                     </td>
                   </tr>
                 );

@@ -432,3 +432,12 @@
   padding: 8px 12px; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff;
   font-size: 13px; font-weight: 700; color: #0f172a; cursor: pointer; min-width: 180px;
 }
+
+/* project stages (same as the Projects page) */
+.ptPill.stage.not-started { background:#f8fafc; color:#64748b; }
+.ptPill.stage.onboarded, .ptPill.stage.requirement-gathering { background:#eff6ff; color:#2563eb; }
+.ptPill.stage.design { background:#fdf2f8; color:#db2777; }
+.ptPill.stage.development-in-progress { background:#eef2ff; color:#4f46e5; }
+.ptPill.stage.testing-\/-review { background:#f5f3ff; color:#7c3aed; }
+.ptPill.stage.deployed-\/-live, .ptPill.stage.project-completed { background:#ecfdf5; color:#16a34a; }
+.ptPill.stage.on-hold { background:#fff7ed; color:#c2410c; }

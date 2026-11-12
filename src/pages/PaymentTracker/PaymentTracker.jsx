@@ -36,7 +36,9 @@ const STATUS_LABEL = { paid: "Paid", partial: "Partial", unpaid: "Unpaid", "no-v
 const cls = (s = "") => String(s).toLowerCase().replace(/\s+/g, "-");
 
 const BRANCHES   = ["All", "Mysore", "Bangalore", "Mumbai"];
-const STAGES     = ["All", "Lead Capture", "Reachable", "Qualified", "Proposal", "Closed"];
+// Project stages, the same as the Projects page ("none" = no project stage yet)
+const STAGES     = ["All", "Onboarded", "Requirement Gathering", "Design", "Development in Progress", "Testing / Review", "Deployed / Live", "Project Completed", "On Hold", "none"];
+const projStage  = (x) => (x.projectCompleted ? "Project Completed" : x.projectStage || "Not started");
 const PAY_STATUS = ["All", "Paid", "Partial", "Unpaid"];
 const PAY_MODES  = ["NEFT", "RTGS", "UPI", "Cheque", "Cash", "IMPS", "Wire"];
 
@@ -78,7 +80,7 @@ export default function PaymentTracker() {
       setLoading(true); setErr("");
       const p = new URLSearchParams();
       if (filters.branch !== "All") p.set("branch", filters.branch);
-      if (filters.stage  !== "All") p.set("stage",  filters.stage);
+      if (filters.stage  !== "All") p.set("projectStage", filters.stage);
       if (filters.rep    !== "All") p.set("rep",     filters.rep);
       if (filters.q.trim())         p.set("q",       filters.q.trim());
 
@@ -96,7 +98,7 @@ export default function PaymentTracker() {
           phone:            x.phone || "-",
           business:         x.business || "-",
           branch:           x.branch || "-",
-          stage:            x.stage || "-",
+          stage:            projStage(x),
           rep:              x.rep || "-",
           value:            g.base,
           gstApplicable:    Boolean(x.gstApplicable),
@@ -362,7 +364,7 @@ export default function PaymentTracker() {
               </select>
 
               <select value={filters.stage} onChange={(e) => setFilters((p) => ({ ...p, stage: e.target.value }))}>
-                {STAGES.map((x) => <option key={x} value={x}>{x === "All" ? "All Stages" : x}</option>)}
+                {STAGES.map((x) => <option key={x} value={x}>{x === "All" ? "All Stages" : x === "none" ? "Not started" : x}</option>)}
               </select>
 
               <select value={filters.payStatus} onChange={(e) => setFilters((p) => ({ ...p, payStatus: e.target.value }))}>

@@ -143,3 +143,7 @@
 .ep-rep-plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; padding: 10px; background: #f8fafc; border-radius: 10px; }
 .ep-rep-plans ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
 .ep-rep-plans li.done { color: #64748b; text-decoration: line-through; }
+
+/* work log custom dates */
+.ep-dates { display: inline-flex; align-items: center; gap: 6px; }
+.ep-dates input { height: 38px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0 10px; background: #fff; color: #0f172a; font: inherit; }

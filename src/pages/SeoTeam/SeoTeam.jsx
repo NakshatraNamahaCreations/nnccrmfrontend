@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
-import { billingApi } from "../ProjectBilling/billingMeta";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import {
@@ -11,13 +10,13 @@ import {
 import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm , TeamPick } from "./SeoForms";
 import "./SeoTeam.css";
 
-const TABS = [["today", "Today"], ["work", "Work log"], ["ads", "Google Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
+const TABS = [["work", "Work log"], ["ads", "Google Ads"], ["meta", "Meta Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
 
 export default function SeoTeam() {
   const [raw, setRaw] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("today");
+  const [tab, setTab] = useState("work");
   const [who, setWho] = useState("all");
   const [modal, setModal] = useState(null); // { kind, ...props }
   const [sel, setSel] = useState({ kc: "", hc: "", rc: "", ac: "" }); // client picked in ranks / history / reports / ads
@@ -63,7 +62,6 @@ export default function SeoTeam() {
   const active = D.clients.filter(c => c.isActive !== false);
   const mineC = (c) => who === "all" || c.members.includes(who) || [c.seo, c.ads, c.design].includes(who);
   const ctx = { D, client, person, av, mineC, active, who, setModal, load, setTab, sel, setSel };
-  const pend = active.filter(c => c.ads && mineC(c) && !D.ads.some(r => r.cid === c.id && r.date === T(0))).length;
   const done = (msg) => { setModal(null); if (msg) toast.success(msg); load(); };
 
   return (
@@ -76,7 +74,7 @@ export default function SeoTeam() {
             <nav className="tabs" aria-label="Sections">
               {TABS.map(([k, t]) => (
                 <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => { setTab(k); window.scrollTo(0, 0); }}>
-                  {t}{k === "today" && pend > 0 && <em>{pend}</em>}
+                  {t}
                 </button>
               ))}
             </nav>
@@ -98,9 +96,9 @@ export default function SeoTeam() {
               </div></div>
             ) : (
               <>
-                {tab === "today" && <TodayView {...ctx} />}
                 {tab === "work" && <WorkView {...ctx} />}
                 {tab === "ads" && <AdsTab {...ctx} />}
+                {tab === "meta" && <MetaTab {...ctx} />}
                 {tab === "ranks" && <RanksView {...ctx} />}
                 {tab === "history" && <HistoryView {...ctx} />}
                 {tab === "reports" && <ReportsView {...ctx} />}
@@ -174,89 +172,6 @@ function WorkTable({ L, client, av, canDelete, onChanged }) {
   );
 }
 
-/* ───────── TODAY ───────── */
-function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel, load }) {
-  const C = active.filter(mineC), wk = weekOf(T(0)), mo = monthOf(T(0));
-  const adsC = C.filter(c => c.ads);
-  const sent = adsC.filter(c => D.ads.some(r => r.cid === c.id && r.date === T(0) && r.sent));
-  const todayW = D.work.filter(w => w.date === T(0) && (who === "all" || w.who === who));
-  const hr = new Date().getHours();
-  const rows = C.map(c => {
-    const W = D.work.filter(w => w.cid === c.id);
-    const bt = Math.ceil((c.targets?.backlink || 0) / Math.max(1, workdaysIn(mo)));
-    const m = c.ads ? adsAgg(D.ads.filter(r => r.cid === c.id && inP(r, mo))) : null;
-    return {
-      c, bt, m,
-      bToday: W.filter(w => w.type === "backlink" && w.date === T(0)).length,
-      gW: W.filter(w => w.type === "gmb" && inP(w, wk)).length, gt: Math.ceil((c.targets?.gmb || 0) / 4.3),
-      blM: W.filter(w => w.type === "blog" && inP(w, mo)).length,
-      poM: W.filter(w => w.type === "poster" && inP(w, mo)).length,
-      adsDay: c.ads ? D.ads.find(r => r.cid === c.id && r.date === T(0)) : null,
-    };
-  });
-  const dayOfMonth = parse(T(0)).getDate();
-  const member = (id) => D.team.find(t => t.id === id);
-  // A message in the Employee Portal to whoever is behind on this client
-  const remind = async (r) => {
-    const todo = [];
-    if (r.c.ads && !r.adsDay?.sent) todo.push({ who: r.c.ads, t: "today's Google Ads report" });
-    if (r.bToday < r.bt) todo.push({ who: r.c.seo, t: `backlinks (${r.bToday} of ${r.bt} today)` });
-    if (r.gW < r.gt) todo.push({ who: r.c.seo, t: `GMB posts (${r.gW} of ${r.gt} this week)` });
-    if (r.blM < (r.c.targets?.blog || 0)) todo.push({ who: r.c.seo, t: `blogs (${r.blM} of ${r.c.targets?.blog || 0} this month)` });
-    if (r.poM < (r.c.targets?.poster || 0)) todo.push({ who: r.c.design, t: `posters (${r.poM} of ${r.c.targets?.poster || 0} this month)` });
-    // everyone on the client's team is reminded of everything pending
-    const by = {};
-    const people = [...new Set([...r.c.members, ...todo.map(x => x.who)].filter(Boolean))];
-    people.forEach(id => { const m = member(id); if (m?.account) by[m.account] = { name: m.name, items: todo.map(x => x.t) }; });
-    const L = Object.entries(by);
-    if (!L.length) { toast.error(todo.length ? "The people on this client have no Employee Portal login" : "Nothing pending for this client"); return; }
-    try {
-      await Promise.all(L.map(([acc, v]) => billingApi(`/portal/admin/messages/${acc}`, { method: "POST", body: { refName: r.c.name, text: `Hi ${v.name.split(" ")[0]}, a reminder for ${r.c.name}: please complete ${v.items.join(", ")}. Thank you.` } })));
-      toast.success(`Reminder sent to ${L.map(([, v]) => v.name).join(" and ")}`);
-    } catch (e) { toast.error(e.message); }
-  };
-  return (
-    <>
-      <h2 className="t">Today<span>.</span></h2>
-      <p className="lead">{fdw(T(0))} · <b>{sent.length} of {adsC.length} Google Ads reports sent</b> · {todayW.length} work items logged today</p>
-      <div className="kpis">
-        <div className="kpi"><span className="l">Ads reports to clients today</span><span className={`v ${sent.length < adsC.length && hr >= 18 ? "red" : sent.length < adsC.length ? "amb" : "ok"}`}>{sent.length} / {adsC.length}</span><span className="s">Send by 7 pm every working day</span></div>
-        <div className="kpi"><span className="l">Backlinks today</span><span className="v">{todayW.filter(w => w.type === "backlink").length}</span><span className="s">Target {rows.reduce((a, r) => a + r.bt, 0)} across clients</span></div>
-        <div className="kpi"><span className="l">GMB posts this week</span><span className="v">{rows.reduce((a, r) => a + r.gW, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.gt, 0)}</span></div>
-        <div className="kpi"><span className="l">Blogs this month</span><span className="v">{rows.reduce((a, r) => a + r.blM, 0)}</span><span className="s">Target {C.reduce((a, c) => a + (c.targets?.blog || 0), 0)}</span></div>
-        <div className="kpi"><span className="l">Ad spend this month</span><span className="v">{inr(rows.reduce((a, r) => a + (r.m ? r.m.spend : 0), 0))}</span><span className="s">{rows.reduce((a, r) => a + (r.m ? r.m.conv : 0), 0)} leads so far</span></div>
-      </div>
-      <div className="card"><h3>Client checklist for today <small>green done · grey pending · red overdue</small></h3>
-        <div className="tw"><table><thead><tr><th>Client</th><th>Team</th><th>Google Ads report</th><th>Backlinks today</th><th>GMB this week</th><th>Blogs this month</th><th>Posters this month</th><th>Ad budget used</th><th className="r" /></tr></thead><tbody>
-          {rows.map(r => (
-            <tr key={r.c.id}>
-              <td><button type="button" className="link" onClick={() => { setSel(s => ({ ...s, rc: r.c.id })); setTab("reports"); }}>{r.c.name}</button><span className="sub">{r.c.site}</span></td>
-              <td><span className="who">{r.c.members.map(id => av(id))}</span></td>
-              <td>{r.c.ads
-                ? r.adsDay?.sent ? <Chk ok>Sent</Chk>
-                  : r.adsDay ? <button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>
-                    : <span className={`pill ${hr >= 18 ? "p-red" : "p-grey"}`}>{hr >= 18 ? "Late" : "Not sent yet"}{member(r.c.ads) ? ` · ${member(r.c.ads).name.split(" ")[0]}` : ""}</span>
-                : <span className="sub">No ads</span>}</td>
-              <td><Chk ok={r.bToday >= r.bt}>{r.bToday} of {r.bt}</Chk></td>
-              <td><Chk ok={r.gW >= r.gt}>{r.gW} of {r.gt}</Chk></td>
-              <td><Chk ok={r.blM >= (r.c.targets?.blog || 0)} late={r.blM < ((r.c.targets?.blog || 0) * dayOfMonth) / 30 - 1}>{r.blM} of {r.c.targets?.blog || 0}</Chk></td>
-              <td><Chk ok={r.poM >= (r.c.targets?.poster || 0)}>{r.poM} of {r.c.targets?.poster || 0}</Chk></td>
-              <td style={{ minWidth: 150 }}>{r.m && r.c.budget ? (
-                <><span className="ub"><span className={`bar ${pct(r.m.spend, r.c.budget) > pct(dayOfMonth, 30) + 12 ? "red" : ""}`}><i style={{ width: `${Math.min(100, pct(r.m.spend, r.c.budget))}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{pct(r.m.spend, r.c.budget)}%</span></span>
-                  <span className="sub">{inr(r.m.spend)} of {inr(r.c.budget)}</span></>
-              ) : <span className="sub">-</span>}</td>
-              <td className="r"><button type="button" className="btn sm" onClick={() => remind(r)} title="Message the person responsible in the Employee Portal">Remind</button></td>
-            </tr>
-          ))}
-        </tbody></table></div>
-      </div>
-      <div className="card"><h3>Logged today <small>{todayW.length} items</small><button type="button" className="btn sm" onClick={() => setTab("work")}>Full work log</button></h3>
-        <WorkTable L={todayW.slice(0, 15)} client={client} av={av} onChanged={load} />
-      </div>
-    </>
-  );
-}
-
 /* ───────── WORK LOG ───────── */
 function WorkView({ D, client, av, who, load }) {
   const [f, setF] = useState({ per: "week", cid: "", type: "", who: "", q: "" });
@@ -299,7 +214,7 @@ function WorkView({ D, client, av, who, load }) {
 /* ───────── GOOGLE ADS ───────── */
 function AdsTab({ D, client, av, mineC, active, setModal, sel, setSel }) {
   const C = active.filter(c => c.ads && mineC(c));
-  const L = D.ads.filter(r => (!sel.ac || r.cid === sel.ac) && C.some(c => c.id === r.cid)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
+  const L = D.ads.filter(r => hasGoogle(r) && (!sel.ac || r.cid === sel.ac) && C.some(c => c.id === r.cid)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
   const now = parse(T(0));
   const pace = (now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100;
   return (
@@ -326,7 +241,7 @@ function AdsTab({ D, client, av, mineC, active, setModal, sel, setSel }) {
           const s = adsAgg([r]);
           return (
             <tr key={r.id}>
-              <td className="num">{fdw(r.date)}</td><td>{client(r.cid)?.name}</td>
+              <td className="num">{fdw(r.date)}</td><td>{client(r.cid)?.name}{r.campaign && <span className="sub">{r.campaign}</span>}</td>
               <td className="r num b">{inr(r.spend)}</td><td className="r num">{num(r.clicks)}</td><td className="r num">{s.ctr.toFixed(2)}%</td><td className="r num">{inr2(s.cpc)}</td>
               <td className="r num b">{r.conv}</td><td className="r num">{r.conv ? inr(s.cpl) : "-"}</td>
               <td>{(r.terms || []).length} terms{s.waste.length > 0 && <span className="sub" style={{ color: "var(--red)" }}>{inr(s.waste.reduce((a, t) => a + t.cost, 0))} on {s.waste.length} with no lead</span>}</td>
@@ -339,6 +254,53 @@ function AdsTab({ D, client, av, mineC, active, setModal, sel, setSel }) {
           );
         })}
         {!L.length && <tr><td colSpan={11} className="empty">No reports yet.</td></tr>}
+      </tbody></table></div></div>
+    </>
+  );
+}
+
+/* ───────── META ADS ───────── */
+// A day's report has Google Ads numbers (a Meta-only day has none)
+const hasGoogle = (r) => !r.meta || r.spend || r.clicks || r.impr || r.conv || (r.terms || []).length > 0;
+function MetaTab({ D, client, av, mineC, active, sel, setSel }) {
+  const R = D.ads.filter(r => r.meta);
+  const C = active.filter(c => mineC(c) && (c.metaBudget > 0 || R.some(r => r.cid === c.id)));
+  const L = R.filter(r => (!sel.mc || r.cid === sel.mc) && C.some(c => c.id === r.cid)).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 60);
+  const mo = monthOf(T(0));
+  const now = parse(T(0));
+  const pace = (now.getDate() / new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()) * 100;
+  const sum = (L2) => L2.reduce((o, r) => ({ spend: o.spend + (r.meta.spend || 0), clicks: o.clicks + (r.meta.clicks || 0), impr: o.impr + (r.meta.impr || 0), conv: o.conv + (r.meta.conv || 0) }), { spend: 0, clicks: 0, impr: 0, conv: 0 });
+  return (
+    <>
+      <h2 className="t">Meta Ads<span>.</span></h2>
+      <p className="lead">Facebook and Instagram ads. The Ads expert sends the daily Meta Ads report from the Employee Portal (Daily ads report → Meta Ads).</p>
+      {!C.length && <div className="card"><div className="empty">No Meta Ads reports yet. Set a Meta Ads budget on a client in Clients and settings, and the reports sent from the portal show here.</div></div>}
+      <div className="kpis">{C.map(c => {
+        const m = sum(R.filter(r => r.cid === c.id && inP(r, mo))), u = pct(m.spend, c.metaBudget);
+        return (
+          <div key={c.id} className="kpi"><span className="l">{c.name}</span><span className="v" style={{ fontSize: 19 }}>{inr(m.spend)}</span>
+            {c.metaBudget ? <span className="ub"><span className={`bar ${u > pace + 12 ? "red" : u < pace - 15 ? "amb" : "ok"}`}><i style={{ width: `${Math.min(100, u)}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{u}%</span></span> : null}
+            <span className="s">{c.metaBudget ? `of ${inr(c.metaBudget)} · ` : ""}{m.conv} conversions · {m.conv ? `${inr(m.spend / m.conv)} each` : "none yet"}</span></div>
+        );
+      })}</div>
+      <div className="filters">
+        <ClientSelect list={C} value={sel.mc || ""} onChange={v => setSel(s => ({ ...s, mc: v }))} allLabel="All Meta Ads clients" />
+      </div>
+      <div className="card"><div className="tw"><table><thead><tr><th>Date</th><th>Client</th><th>Campaign</th><th className="r">Spent</th><th className="r">Impressions</th><th className="r">Clicks</th><th className="r">CTR</th><th className="r">CPC</th><th className="r">Conversions</th><th className="r">Cost per conversion</th><th>By</th><th className="r">Report</th></tr></thead><tbody>
+        {L.map(r => {
+          const m = r.meta, ctr = m.ctr != null ? m.ctr : m.impr ? (m.clicks / m.impr) * 100 : 0, cpc = m.cpc != null ? m.cpc : m.clicks ? m.spend / m.clicks : 0;
+          return (
+            <tr key={r.id}>
+              <td className="num">{fdw(r.date)}</td><td>{client(r.cid)?.name}</td><td>{m.campaign || "-"}</td>
+              <td className="r num b">{inr(m.spend)}</td><td className="r num">{num(m.impr)}</td><td className="r num">{num(m.clicks)}</td>
+              <td className="r num">{Number(ctr).toFixed(2)}%</td><td className="r num">{inr2(cpc)}</td>
+              <td className="r num b">{m.conv}</td><td className="r num">{m.conv ? inr(m.spend / m.conv) : "-"}</td>
+              <td>{av(r.who)}</td>
+              <td className="r">{r.metaSent ? <span className="pill p-ok">Sent</span> : <span className="pill p-grey">Not sent</span>}</td>
+            </tr>
+          );
+        })}
+        {!L.length && <tr><td colSpan={12} className="empty">No Meta Ads reports yet.</td></tr>}
       </tbody></table></div></div>
     </>
   );

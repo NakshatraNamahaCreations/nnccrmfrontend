@@ -334,9 +334,10 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
   const options = useMemo(() => {
     const s = find.trim().toLowerCase();
     const L = (leads || []).filter(l => !D.clients.some(c => String(c.lead?._id || c.lead) === l._id));
-    const hit = L.filter(l => !s || [l.name, l.business, l.company, l.phone].some(v => String(v || "").toLowerCase().includes(s)));
-    // leads with an SEO / Ads monthly service first
-    return hit.sort((a, b) => b.services.length - a.services.length).slice(0, 150);
+    const hit = L.filter(l => !s || [l.name, l.business, l.company, l.phone, l.email].some(v => String(v || "").toLowerCase().includes(s)));
+    // leads with an SEO / Ads monthly service first, then projects (ongoing and completed), then other leads
+    const rank = (l) => (l.services.length ? 2 : 0) + (l.project ? 1 : 0);
+    return hit.sort((a, b) => rank(b) - rank(a)).slice(0, 600);
   }, [leads, find, D.clients]);
   const submit = (ev) => {
     ev.preventDefault();
@@ -352,13 +353,13 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
     <Modal title={edit ? `Edit ${edit.name}` : "Add SEO / Ads client"} onClose={onClose} wide>
       <form className="m-b" onSubmit={submit}>
         {!edit && (
-          <F label="CRM lead (fills the details below; leads with an SEO or Google Ads monthly service are listed first)">
+          <F label="CRM lead or project (fills the details below; SEO / Ads clients first, then all projects, ongoing and completed)">
             {leads == null ? <span className="note">Loading leads…</span> : (
               <>
-                <input value={find} onChange={e => setFind(e.target.value)} placeholder="Search lead by name, company or phone" />
+                <input value={find} onChange={e => setFind(e.target.value)} placeholder="Search by client name, project name or phone" />
                 <select size={5} value={f.lead} onChange={e => pickLead(e.target.value)} className="pick">
                   <option value="">Not in the CRM</option>
-                  {options.map(l => <option key={l._id} value={l._id}>{l.name}{l.business || l.company ? ` · ${l.business || l.company}` : ""}{l.services.length ? ` · ${l.services.map(s => s.type).join(", ")}` : ""}</option>)}
+                  {options.map(l => <option key={l._id} value={l._id}>{[l.name, l.business || l.company, l.project ? `Project: ${l.project}` : "", l.services.map(s => s.type).join(", ")].filter(Boolean).join(" · ")}</option>)}
                 </select>
               </>
             )}
