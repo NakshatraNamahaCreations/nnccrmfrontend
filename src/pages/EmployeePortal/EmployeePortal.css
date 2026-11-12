@@ -128,3 +128,18 @@
 .ep-wfiles { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
 .ep-wfiles a { font-size: 11.5px; padding: 2px 8px; border-radius: 99px; background: #EEF3FF; color: #2563EB; text-decoration: none; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ep-wfiles a:hover { text-decoration: underline; }
+
+/* team plans lead */
+.ep-lead { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1.5px solid #e2e8f0; border-radius: 12px; margin: 4px 0 14px; cursor: pointer; background: #fff; }
+.ep-lead input { width: 17px; height: 17px; margin-top: 2px; accent-color: #2563eb; flex: none; }
+.ep-lead span { display: grid; gap: 2px; }
+.ep-lead b { color: #0f172a; font-size: 14px; }
+.ep-lead small { color: #64748b; font-size: 12.5px; }
+.ep-lead.on { border-color: #2563eb; background: #eff4ff; }
+.ep-rep { padding: 14px 16px; border-top: 1px solid #e2e8f0; display: grid; gap: 8px; }
+.ep-rep-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.ep-rep-h .nm { flex: 1; min-width: 200px; display: grid; }
+.ep-rep-h .nm b { color: #0f172a; }
+.ep-rep-plans { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; padding: 10px; background: #f8fafc; border-radius: 10px; }
+.ep-rep-plans ul { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 3px; font-size: 13px; }
+.ep-rep-plans li.done { color: #64748b; text-decoration: line-through; }

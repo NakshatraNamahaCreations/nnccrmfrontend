@@ -300,7 +300,7 @@ function ProjectChecks({ list, value, onChange }) {
 // Add an employee (active straight away, with a password) or edit one's details
 function EmployeeForm({ a, onClose, onDone }) {
   const isNew = !a;
-  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", branch: a?.branch || "Bangalore", password: "" });
+  const [d, setD] = useState({ name: a?.name || "", email: a?.email || "", phone: a?.phone === "-" ? "" : a?.phone || "", branch: a?.branch || "Bangalore", planLead: !!a?.planLead, password: "" });
   const [roles, setRoles] = useState(() => (a ? rolesOf(a) : ["full"]));   // the first one is the main role
   const main = roles[0] || "";
   const togRole = (k) => setRoles(L => (L.includes(k) ? L.filter(x => x !== k) : [...L, k]));
@@ -321,7 +321,7 @@ function EmployeeForm({ a, onClose, onDone }) {
         toast.success(`${d.name} added. They can sign in to the Employee Portal now`);
         onDone({ a: { name: d.name, email: d.email, phone: d.phone }, pw: d.password, set: true });
       } else {
-        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, branch: d.branch, role: main, roles: roles.slice(1) } });
+        await papi(`/accounts/${a.id}`, { method: "PUT", body: { name: d.name, phone: d.phone, branch: d.branch, planLead: d.planLead, role: main, roles: roles.slice(1) } });
         toast.success("Employee updated"); onDone();
       }
     } catch (ex) { toast.error(ex.message); setBusy(false); }
@@ -338,6 +338,8 @@ function EmployeeForm({ a, onClose, onDone }) {
           <label className="f"><span className="flabel">Mobile number</span><input type="tel" value={d.phone} onChange={set("phone")} /></label>
           <label className="f"><span className="flabel">Branch</span><select value={d.branch} onChange={set("branch")}>{BRANCHES.map(b => <option key={b}>{b}</option>)}</select></label>
         </div>
+        <label className={`ep-lead ${d.planLead ? "on" : ""}`}><input type="checkbox" checked={d.planLead} onChange={e => setD(s => ({ ...s, planLead: e.target.checked }))} />
+          <span><b>Team plans lead</b><small>Sees every employee's Plans for today in the portal and sends you the daily report.</small></span></label>
         <div className="f"><span className="flabel">All their roles ({roles.length}) · tick every kind of work they do</span>
           <div className="ep-roles">{DEPTS.map(g => (
             <div key={g} className="ep-rg"><b>{g}</b>
@@ -690,12 +692,47 @@ function Plans({ accounts }) {
             </div>
           ) : <div className="card" style={{ marginBottom: 14 }}><div className="empty">{withItems.length ? "No plans match these filters." : isToday ? "No employee has added a plan for today yet." : "No plans were added that day."}</div></div>}
           {missing.length > 0 && (
-            <div className="card"><h3>{isToday ? "Not added a plan yet" : "No plan that day"} <small>{missing.length}</small></h3>
+            <div className="card" style={{ marginBottom: 14 }}><h3>{isToday ? "Not added a plan yet" : "No plan that day"} <small>{missing.length}</small></h3>
               <div className="ep-miss">{missing.map(a => <span key={a.id}>{a.name}</span>)}</div></div>
           )}
+          <PlanReports list={D.data?.reports || []} />
         </>
       )}
     </>
+  );
+}
+
+// Reports the team plans lead sent from the portal: everyone's plans as they were, a note and files
+function PlanReports({ list }) {
+  const [open, setOpen] = useState("");
+  const tm = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
+  const href = (u) => (/^https?:/.test(u) ? u : `${API}${u}`);
+  return (
+    <div className="card"><h3>Reports from the team plans lead <small>{list.length}</small></h3>
+      {!list.length ? <div className="empty">No report sent for this day yet. Tick "Team plans lead" on an employee (Employees → Edit) so they can send one.</div> : list.map(r => {
+        const n = r.plans.reduce((a, p) => a + p.items.length, 0), dn = r.plans.reduce((a, p) => a + p.items.filter(i => i.done).length, 0);
+        return (
+          <div key={r._id} className="ep-rep">
+            <div className="ep-rep-h">
+              <Av name={r.account?.name} role={r.account?.role} />
+              <div className="nm"><b>{r.account?.name || "Employee"}</b><span className="sub">Sent at {tm(r.createdAt)} · {r.plans.length} people · {n} plans, {dn} done{r.missing.length ? ` · ${r.missing.length} without a plan` : ""}</span></div>
+              <button type="button" className="btn sm" onClick={() => setOpen(o => (o === r._id ? "" : r._id))}>{open === r._id ? "Hide plans" : "See plans"}</button>
+            </div>
+            {r.note && <pre className="ep-mom">{r.note}</pre>}
+            {r.files?.length > 0 && <div className="ep-docs">{r.files.map(f => <a key={f.url} href={href(f.url)} target="_blank" rel="noopener noreferrer" className="btn sm">{f.name}</a>)}</div>}
+            {open === r._id && (
+              <div className="ep-rep-plans">
+                {r.plans.map((p, i) => (
+                  <div key={i}><b>{p.name}</b> <span className="sub" style={{ display: "inline" }}>{ROLES[p.role]?.[0] || p.role}</span>
+                    <ul>{p.items.map((it, k) => <li key={k} className={it.done ? "done" : ""}>{it.done ? "✓" : "○"} {it.text}{it.refName ? ` · ${it.refName}` : ""}</li>)}</ul></div>
+                ))}
+                {r.missing.length > 0 && <p className="sub">No plan: {r.missing.join(", ")}</p>}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
