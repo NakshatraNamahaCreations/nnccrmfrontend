@@ -147,3 +147,13 @@
 /* work log custom dates */
 .ep-dates { display: inline-flex; align-items: center; gap: 6px; }
 .ep-dates input { height: 38px; border: 1px solid #e2e8f0; border-radius: 10px; padding: 0 10px; background: #fff; color: #0f172a; font: inherit; }
+
+/* employees table: everything lined up in the middle of the row */
+.ep .ep-emps td { vertical-align: middle; }
+.ep .ep-emps .ep-sl { color: #94a3b8; font-weight: 600; width: 48px; }
+.ep .ep-emps .ep-role { min-width: 170px; max-width: 230px; }
+.ep .ep-rchips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 3px; }
+.ep .ep-rchips span { background: #f1f5f9; color: #0f172a; border-radius: 6px; padding: 2px 7px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.ep .ep-emps .ep-contact { max-width: 230px; }
+.ep .ep-emps .ep-contact > span:first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ep .ep-emps th { white-space: nowrap; }

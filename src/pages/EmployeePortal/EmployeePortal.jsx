@@ -122,7 +122,6 @@ function useGet(path) {
 const rolesOf = (a) => [...new Set([a?.role, ...(a?.roles || [])].filter(r => ROLES[r]))];
 const anyRole = (a, list) => rolesOf(a).some(r => list.includes(r));
 const roleNames = (a) => rolesOf(a).map(r => ROLES[r][0]).join(" · ");
-const Role = ({ a }) => <>{roleNames(a) || a.role}<span className="sub">{[...new Set(rolesOf(a).map(r => ROLES[r][1]))].join(" · ")}</span></>;
 const Av = ({ name, role }) => <span className="av" style={{ background: ROLES[role]?.[2] || "#64748B" }}>{initials(name)}</span>;
 
 export default function EmployeePortal() {
@@ -221,15 +220,15 @@ function People({ A }) {
       <div className="filters">{[["all", "All"], ["pending", "Waiting for approval"], ["active", "Active"], ["disabled", "Disabled"]].map(([k, t]) => (
         <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => { setF(k); setPage(0); }}>{t}</button>
       ))}<span className="sp" /><button type="button" className="btn pri" onClick={() => setAdding(true)}><UserPlus size={14} /> Add employee</button></div>
-      <div className="card"><div className="tw"><table>
+      <div className="card"><div className="tw"><table className="ep-emps">
         <thead><tr><th className="n" style={{ width: 48 }}>Sl no</th><th>Employee</th><th>Role</th><th>Contact</th><th>Branch</th><th>Works on</th><th>Last sign in</th><th>Status</th><th /></tr></thead>
         <tbody>
           {A.loading ? <tr><td colSpan={9}><div className="empty">Loading…</div></td></tr> : shown.length ? shown.map((a, i) => (
             <tr key={a.id}>
-              <td className="n sub">{cur * per + i + 1}</td>
+              <td className="n ep-sl">{cur * per + i + 1}</td>
               <td><div className="ep-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">joined {fd(dayOf(a.created))}</span></span></div></td>
-              <td><Role a={a} /></td>
-              <td>{a.email}<span className="sub">{a.phone}</span></td>
+              <td className="ep-role"><span className="ep-rchips">{rolesOf(a).map(r => <span key={r}>{ROLES[r][0]}</span>)}</span><span className="sub">{[...new Set(rolesOf(a).map(r => ROLES[r][1]))].join(" · ")}</span></td>
+              <td className="ep-contact"><span title={a.email}>{a.email}</span><span className="sub">{a.phone}</span></td>
               <td>{a.branch || "-"}</td>
               <td className="ep-works">{a.orphan ? <span className="pill p-red">Removed from the CRM team</span>
                 : a.role === "acc" ? <span className="sub">All projects (accounts)</span>
@@ -244,7 +243,7 @@ function People({ A }) {
                 {a.status === "pending" && <button type="button" className="btn sm pri" onClick={() => upd(a, { status: "active" }, `${a.name} approved`)}>Approve</button>}
                 {a.status === "disabled" && <button type="button" className="btn sm" onClick={() => upd(a, { status: "active" }, "Account enabled")}>Enable</button>}
                 <button type="button" className="btn sm" title="Edit" aria-label={`Edit ${a.name}`} onClick={() => setEditFor(a)}><Pencil size={13} /></button>
-                {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => { setPw({ v: "", show: false, busy: false }); setPwFor(a); }}>Set password</button>}
+                {a.status !== "pending" && <button type="button" className="btn sm" title="Set a new password" onClick={() => { setPw({ v: "", show: false, busy: false }); setPwFor(a); }}>Password</button>}
                 {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => setAsk({ kind: "reset", a })}>Reset</button>}
                 {a.status !== "disabled" && <button type="button" className="btn sm late" onClick={() => setAsk({ kind: "disable", a })}>{a.status === "pending" ? "Reject" : "Disable"}</button>}
                 <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${a.name}`} onClick={() => setAsk({ kind: "delete", a })}><Trash2 size={13} /></button>
