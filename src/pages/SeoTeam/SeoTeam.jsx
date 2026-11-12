@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
+import { billingApi } from "../ProjectBilling/billingMeta";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import {
@@ -10,13 +11,13 @@ import {
 import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm , TeamPick } from "./SeoForms";
 import "./SeoTeam.css";
 
-const TABS = [["work", "Work log"], ["ads", "Google Ads"], ["meta", "Meta Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
+const TABS = [["today", "Today"], ["work", "Work log"], ["ads", "Google Ads"], ["meta", "Meta Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
 
 export default function SeoTeam() {
   const [raw, setRaw] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState("work");
+  const [tab, setTab] = useState("today");
   const [who, setWho] = useState("all");
   const [modal, setModal] = useState(null); // { kind, ...props }
   const [sel, setSel] = useState({ kc: "", hc: "", rc: "", ac: "" }); // client picked in ranks / history / reports / ads
@@ -62,6 +63,7 @@ export default function SeoTeam() {
   const active = D.clients.filter(c => c.isActive !== false);
   const mineC = (c) => who === "all" || c.members.includes(who) || [c.seo, c.ads, c.design].includes(who);
   const ctx = { D, client, person, av, mineC, active, who, setModal, load, setTab, sel, setSel };
+  const pend = active.filter(c => c.ads && mineC(c) && !D.ads.some(r => r.cid === c.id && r.date === T(0) && hasGoogle(r))).length;
   const done = (msg) => { setModal(null); if (msg) toast.success(msg); load(); };
 
   return (
@@ -74,7 +76,7 @@ export default function SeoTeam() {
             <nav className="tabs" aria-label="Sections">
               {TABS.map(([k, t]) => (
                 <button key={k} type="button" className={tab === k ? "on" : ""} onClick={() => { setTab(k); window.scrollTo(0, 0); }}>
-                  {t}
+                  {t}{k === "today" && pend > 0 && <em>{pend}</em>}
                 </button>
               ))}
             </nav>
@@ -96,6 +98,7 @@ export default function SeoTeam() {
               </div></div>
             ) : (
               <>
+                {tab === "today" && <TodayView {...ctx} />}
                 {tab === "work" && <WorkView {...ctx} />}
                 {tab === "ads" && <AdsTab {...ctx} />}
                 {tab === "meta" && <MetaTab {...ctx} />}
@@ -169,6 +172,89 @@ function WorkTable({ L, client, av, canDelete, onChanged }) {
         </tr>
       ))}
     </tbody></table></div>
+  );
+}
+
+/* ───────── TODAY ───────── */
+function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel, load }) {
+  const C = active.filter(mineC), mo = monthOf(T(0));
+  const adsC = C.filter(c => c.ads);
+  const sent = adsC.filter(c => D.ads.some(r => r.cid === c.id && r.date === T(0) && r.sent));
+  const todayW = D.work.filter(w => w.date === T(0) && (who === "all" || w.who === who));
+  const hr = new Date().getHours();
+  const rows = C.map(c => {
+    const W = D.work.filter(w => w.cid === c.id);
+    const bt = c.targets?.backlink || 0, gt = c.targets?.gmb || 0;   // monthly targets
+    const m = c.ads ? adsAgg(D.ads.filter(r => r.cid === c.id && inP(r, mo))) : null;
+    return {
+      c, bt, gt, m,
+      bM: W.filter(w => w.type === "backlink" && inP(w, mo)).length,
+      gM: W.filter(w => w.type === "gmb" && inP(w, mo)).length,
+      blM: W.filter(w => w.type === "blog" && inP(w, mo)).length,
+      poM: W.filter(w => w.type === "poster" && inP(w, mo)).length,
+      adsDay: c.ads ? D.ads.find(r => r.cid === c.id && r.date === T(0) && hasGoogle(r)) : null,
+    };
+  });
+  const dayOfMonth = parse(T(0)).getDate();
+  const member = (id) => D.team.find(t => t.id === id);
+  // A message in the Employee Portal to whoever is behind on this client
+  const remind = async (r) => {
+    const todo = [];
+    if (r.c.ads && !r.adsDay?.sent) todo.push({ who: r.c.ads, t: "today's Google Ads report" });
+    if (r.bM < r.bt) todo.push({ who: r.c.seo, t: `backlinks (${r.bM} of ${r.bt} this month)` });
+    if (r.gM < r.gt) todo.push({ who: r.c.seo, t: `GMB posts (${r.gM} of ${r.gt} this month)` });
+    if (r.blM < (r.c.targets?.blog || 0)) todo.push({ who: r.c.seo, t: `blogs (${r.blM} of ${r.c.targets?.blog || 0} this month)` });
+    if (r.poM < (r.c.targets?.poster || 0)) todo.push({ who: r.c.design, t: `posters (${r.poM} of ${r.c.targets?.poster || 0} this month)` });
+    // everyone on the client's team is reminded of everything pending
+    const by = {};
+    const people = [...new Set([...r.c.members, ...todo.map(x => x.who)].filter(Boolean))];
+    people.forEach(id => { const m = member(id); if (m?.account) by[m.account] = { name: m.name, items: todo.map(x => x.t) }; });
+    const L = Object.entries(by);
+    if (!L.length) { toast.error(todo.length ? "The people on this client have no Employee Portal login" : "Nothing pending for this client"); return; }
+    try {
+      await Promise.all(L.map(([acc, v]) => billingApi(`/portal/admin/messages/${acc}`, { method: "POST", body: { refName: r.c.name, text: `Hi ${v.name.split(" ")[0]}, a reminder for ${r.c.name}: please complete ${v.items.join(", ")}. Thank you.` } })));
+      toast.success(`Reminder sent to ${L.map(([, v]) => v.name).join(" and ")}`);
+    } catch (e) { toast.error(e.message); }
+  };
+  return (
+    <>
+      <h2 className="t">Today<span>.</span></h2>
+      <p className="lead">{fdw(T(0))} · <b>{sent.length} of {adsC.length} Google Ads reports sent</b> · {todayW.length} work items logged today</p>
+      <div className="kpis">
+        <div className="kpi"><span className="l">Ads reports to clients today</span><span className={`v ${sent.length < adsC.length && hr >= 18 ? "red" : sent.length < adsC.length ? "amb" : "ok"}`}>{sent.length} / {adsC.length}</span><span className="s">Send by 7 pm every working day</span></div>
+        <div className="kpi"><span className="l">Backlinks this month</span><span className="v">{rows.reduce((a, r) => a + r.bM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.bt, 0)} across clients</span></div>
+        <div className="kpi"><span className="l">GMB posts this month</span><span className="v">{rows.reduce((a, r) => a + r.gM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.gt, 0)}</span></div>
+        <div className="kpi"><span className="l">Blogs this month</span><span className="v">{rows.reduce((a, r) => a + r.blM, 0)}</span><span className="s">Target {C.reduce((a, c) => a + (c.targets?.blog || 0), 0)}</span></div>
+        <div className="kpi"><span className="l">Ad spend this month</span><span className="v">{inr(rows.reduce((a, r) => a + (r.m ? r.m.spend : 0), 0))}</span><span className="s">{rows.reduce((a, r) => a + (r.m ? r.m.conv : 0), 0)} leads so far</span></div>
+      </div>
+      <div className="card"><h3>Client checklist for today <small>green done · grey pending · red overdue</small></h3>
+        <div className="tw"><table><thead><tr><th>Client</th><th>Team</th><th>Google Ads report</th><th>Backlinks this month</th><th>GMB this month</th><th>Blogs this month</th><th>Posters this month</th><th>Ad budget used</th><th className="r" /></tr></thead><tbody>
+          {rows.map(r => (
+            <tr key={r.c.id}>
+              <td><button type="button" className="link" onClick={() => { setSel(s => ({ ...s, rc: r.c.id })); setTab("reports"); }}>{r.c.name}</button><span className="sub">{r.c.site}</span></td>
+              <td><span className="who">{r.c.members.map(id => av(id))}</span></td>
+              <td>{r.c.ads
+                ? r.adsDay?.sent ? <Chk ok>Sent</Chk>
+                  : r.adsDay ? <button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>
+                    : <span className={`pill ${hr >= 18 ? "p-red" : "p-grey"}`}>{hr >= 18 ? "Late" : "Not sent yet"}{member(r.c.ads) ? ` · ${member(r.c.ads).name.split(" ")[0]}` : ""}</span>
+                : <span className="sub">No ads</span>}</td>
+              <td><Chk ok={r.bM >= r.bt} late={r.bM < (r.bt * dayOfMonth) / 30 - 1}>{r.bM} of {r.bt}</Chk></td>
+              <td><Chk ok={r.gM >= r.gt} late={r.gM < (r.gt * dayOfMonth) / 30 - 1}>{r.gM} of {r.gt}</Chk></td>
+              <td><Chk ok={r.blM >= (r.c.targets?.blog || 0)} late={r.blM < ((r.c.targets?.blog || 0) * dayOfMonth) / 30 - 1}>{r.blM} of {r.c.targets?.blog || 0}</Chk></td>
+              <td><Chk ok={r.poM >= (r.c.targets?.poster || 0)}>{r.poM} of {r.c.targets?.poster || 0}</Chk></td>
+              <td style={{ minWidth: 150 }}>{r.m && r.c.budget ? (
+                <><span className="ub"><span className={`bar ${pct(r.m.spend, r.c.budget) > pct(dayOfMonth, 30) + 12 ? "red" : ""}`}><i style={{ width: `${Math.min(100, pct(r.m.spend, r.c.budget))}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{pct(r.m.spend, r.c.budget)}%</span></span>
+                  <span className="sub">{inr(r.m.spend)} of {inr(r.c.budget)}</span></>
+              ) : <span className="sub">-</span>}</td>
+              <td className="r"><button type="button" className="btn sm" onClick={() => remind(r)} title="Message the person responsible in the Employee Portal">Remind</button></td>
+            </tr>
+          ))}
+        </tbody></table></div>
+      </div>
+      <div className="card"><h3>Logged today <small>{todayW.length} items</small><button type="button" className="btn sm" onClick={() => setTab("work")}>Full work log</button></h3>
+        <WorkTable L={todayW.slice(0, 15)} client={client} av={av} onChanged={load} />
+      </div>
+    </>
   );
 }
 

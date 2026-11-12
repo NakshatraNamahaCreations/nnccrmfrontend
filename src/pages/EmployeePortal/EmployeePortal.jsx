@@ -33,7 +33,7 @@ const TY = {
   social: "Social media posts", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
   kwresearch: "Keyword research", metaads: "Meta Ads", tracking: "GSC / GA4 / GTM setup",
 };
-const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["today", "Today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
+const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
 const RANGES = [["today", "Today"], ["week", "Last 7 days"], ["month", "Last 30 days"], ["thism", "This month"], ["lastm", "Last month"], ["custom", "Custom dates"]];
 // from and to (YYYY-MM-DD) for a range; custom uses the dates picked
 function rangeDays(k, cf, ct) {
@@ -163,7 +163,6 @@ export default function EmployeePortal() {
             {tab === "people" && <People A={A} />}
             {tab === "messages" && <PortalChat onUnread={setUnread} />}
             {tab === "plans" && <Plans accounts={A.data || []} />}
-            {tab === "today" && <Work accounts={A.data || []} today />}
             {tab === "work" && <Work accounts={A.data || []} />}
             {tab === "meetings" && <Meetings />}
             {tab === "docs" && <SharedDocs />}
@@ -488,7 +487,7 @@ function Work({ accounts, today }) {
   return (
     <>
       <div className="filters">
-        {!today && RANGES.slice(1).map(([k, l]) => <button key={k} type="button" className={`chip ${rg === k ? "on" : ""}`} onClick={() => setRg(k)}>{l}</button>)}
+        {!today && RANGES.map(([k, l]) => <button key={k} type="button" className={`chip ${rg === k ? "on" : ""}`} onClick={() => setRg(k)}>{l}</button>)}
         {!today && rg === "custom" && (
           <span className="ep-dates">
             <input type="date" value={cf} max={T(0)} onChange={e => e.target.value && setCf(e.target.value)} aria-label="From" />
