@@ -76,6 +76,7 @@ function metaTxt(e) {
   if (m.pages) o.push(`${m.pages} page${m.pages > 1 ? "s" : ""}`); if (m.posts) o.push(`${m.posts} post${m.posts > 1 ? "s" : ""}`);
   if (m.kws) o.push(`${m.kws} keywords`); if (m.month) o.push(m.month);
   if (m.tools) o.push(m.tools);
+  if (m.sched) o.push(`scheduled for ${new Date(`${m.sched}T00:00:00`).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}`);
   if (m.files?.length) o.push(`${m.files.length} attachment${m.files.length > 1 ? "s" : ""}`);
   return o.join(" · ");
 }
