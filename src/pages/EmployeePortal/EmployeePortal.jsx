@@ -34,7 +34,7 @@ const TY = {
   kwresearch: "Keyword research", metaads: "Meta Ads", tracking: "GSC / GA4 / GTM setup",
 };
 const TABS = [["people", "Employees"], ["messages", "Messages"], ["plans", "Plans for today"], ["work", "Work log"], ["meetings", "Meetings and MOM"], ["docs", "Documents"], ["tasks", "Tasks"], ["settings", "Settings"]];
-const RANGES = [["today", "Today"], ["week", "Last 7 days"], ["month", "Last 30 days"], ["thism", "This month"], ["lastm", "Last month"], ["custom", "Custom dates"]];
+const RANGES = [["today", "Today"], ["week", "Last 7 days"], ["thism", "This month"], ["lastm", "Last month"], ["custom", "Custom dates"]];
 // from and to (YYYY-MM-DD) for a range; custom uses the dates picked
 function rangeDays(k, cf, ct) {
   const t = T(0), y = +t.slice(0, 4), m = +t.slice(5, 7);
@@ -451,6 +451,8 @@ function Work({ accounts, today }) {
   const [from, to] = rangeDays(today ? "today" : rg, cf, ct);
   const period = rg === "custom" ? (from === to ? fd(from) : `${fd(from)} to ${fd(to)}`) : RANGES.find(r => r[0] === rg)[1];
   const W = useGet(`/work?from=${from}&to=${to}`);
+  const ref = to > T(0) ? T(0) : to;                    // the day shown in the check in / out columns
+  const refL = ref === T(0) ? "today" : fd(ref);
   const d = W.data || { accounts: [], work: [], days: [], blockers: [], attendance: [] };
   const roles = TEAMS[team][1];
   const accs = d.accounts.filter(a => !roles || anyRole(a, roles));
@@ -462,12 +464,12 @@ function Work({ accounts, today }) {
   const active = accs.filter(a => a.status === "active");
   const per = active.map(a => {
     const L = work.filter(w => String(w.account) === a.id);
-    const day = days.find(x => String(x.account) === a.id && x.date === T(0));
-    const att = (d.attendance || []).find(x => String(x.account) === a.id && x.date === T(0));
+    const day = days.find(x => String(x.account) === a.id && x.date === ref);
+    const att = (d.attendance || []).find(x => String(x.account) === a.id && x.date === ref);
     return { a, hrs: L.reduce((s, w) => s + (w.hrs || 0), 0), extra: L.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0), n: L.length, sub: days.filter(x => String(x.account) === a.id).length, day, att };
   }).sort((x, y) => y.hrs - x.hrs);
   const resolve = async (id) => { try { await papi(`/blockers/${id}/resolve`, { method: "PUT" }); toast.success("Marked as sorted"); W.reload(); } catch (ex) { toast.error(ex.message); } };
-  const tw = work.filter(w => w.date === T(0));
+  const tw = work.filter(w => w.date === ref);
   // Excel (CSV) of the work log for this period: every item, then each person's total
   const exportLog = () => {
     const att = (id, dt) => (d.attendance || []).find(x => String(x.account) === id && x.date === dt)?.sessions || [];
@@ -502,10 +504,10 @@ function Work({ accounts, today }) {
       </div>
       {W.err && <div className="card"><div className="empty err">{W.err}</div></div>}
       <div className="kpis">
-        <div className="kpi"><span className="l">Items logged today</span><span className="v">{tw.length}</span></div>
-        <div className="kpi"><span className="l">Hours logged today</span><span className="v">{h1(tw.reduce((s, w) => s + (w.hrs || 0), 0))}</span></div>
-        <div className="kpi"><span className="l">Days submitted today</span><span className="v">{days.filter(x => x.date === T(0)).length} / {active.length}</span></div>
-        <div className="kpi"><span className="l">Checked in today</span><span className="v">{(d.attendance || []).filter(x => x.date === T(0) && ids.has(String(x.account)) && x.sessions?.length).length} / {active.length}</span></div>
+        <div className="kpi"><span className="l">Items logged {refL}</span><span className="v">{tw.length}</span></div>
+        <div className="kpi"><span className="l">Hours logged {refL}</span><span className="v">{h1(tw.reduce((s, w) => s + (w.hrs || 0), 0))}</span></div>
+        <div className="kpi"><span className="l">Days submitted {refL}</span><span className="v">{days.filter(x => x.date === ref).length} / {active.length}</span></div>
+        <div className="kpi"><span className="l">Checked in {refL}</span><span className="v">{(d.attendance || []).filter(x => x.date === ref && ids.has(String(x.account)) && x.sessions?.length).length} / {active.length}</span></div>
         <div className="kpi"><span className="l">Open blockers</span><span className={`v ${bl.length ? "red" : ""}`}>{bl.length}</span></div>
       </div>
       {bl.length > 0 && (
@@ -549,7 +551,7 @@ function Work({ accounts, today }) {
         <div className="card"><h3>People <small>{rg === "custom" ? period : period.toLowerCase()} · click a person to see all their work</small></h3>
           {W.loading ? <div className="empty">Loading…</div> : per.length ? (
             <div className="tw"><table className="ep-people">
-              <thead><tr><th>Employee</th><th>Check in today</th><th>Check out today</th><th className="n">Items</th><th className="n">Days submitted</th><th className="n">Hours</th><th>Today</th><th /></tr></thead>
+              <thead><tr><th>Employee</th><th>Check in {refL}</th><th>Check out {refL}</th><th className="n">Items</th><th className="n">Days submitted</th><th className="n">Hours</th><th>{ref === T(0) ? "Today" : `Day ${fd(ref)}`}</th><th /></tr></thead>
               <tbody>{per.filter(p => !who || p.a.id === who).map(p => {
                 const S = p.att?.sessions || [], open = S.find(x => !x.out), last = [...S].reverse().find(x => x.out);
                 return (
@@ -561,7 +563,7 @@ function Work({ accounts, today }) {
                     <td className="n">{p.n}</td>
                     <td className="n">{p.sub}</td>
                     <td className="n"><b>{h1(p.hrs)} h</b>{p.extra > 0 && <span className="sub">{h1(p.extra)} h extra</span>}</td>
-                    <td>{p.day ? <span className="pill p-ok">Sent {ampm(p.day.at)}</span> : <span className="pill p-amb">Open</span>}</td>
+                    <td>{p.day ? <span className="pill p-ok">Sent {ampm(p.day.at)}</span> : ref === T(0) ? <span className="pill p-amb">Open</span> : <span className="pill p-red">Not submitted</span>}</td>
                     <td className="r"><button type="button" className="btn sm" onClick={(e) => { e.stopPropagation(); setPerson(p.a.id); }}>View <ChevronRight size={14} /></button></td>
                   </tr>
                 );
