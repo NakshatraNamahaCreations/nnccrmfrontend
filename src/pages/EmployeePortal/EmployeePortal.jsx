@@ -28,7 +28,7 @@ const BRANCHES = ["Bangalore", "Mysore", "Mumbai"];
 const TY = {
   backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign or ad changes", negative: "Negative keywords", newad: "New ad or ad group",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
-  poster: "Poster design", logo: "Logo design", vcard: "Visiting card", brochure: "Brochure design", corpvideo: "Corporate video", instavideo: "Instagram ad video", motion: "Motion graphics or explainer video", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
+  indexing: "Page indexing", poster: "Poster design", logo: "Logo design", vcard: "Visiting card", brochure: "Brochure design", corpvideo: "Corporate video", instavideo: "Instagram ad video", motion: "Motion graphics or explainer video", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
   webcontent: "Website content", blogcontent: "Blog content written", landing: "Landing page content", campaign: "Campaign setup",
   social: "Social media posts", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
   kwresearch: "Keyword research", metaads: "Meta Ads", tracking: "GSC / GA4 / GTM setup",
@@ -489,8 +489,20 @@ function Work({ accounts, today }) {
   };
 
   if (person && acc(person)) return (
-    <PersonWork a={acc(person)} work={d.work.filter(w => String(w.account) === person)} days={d.days.filter(x => String(x.account) === person)}
-      attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={period} onClose={() => setPerson(null)} />
+    <PersonWork a={acc(person)} work={d.work.filter(w => String(w.account) === person)} loading={W.loading}
+      period={period} onClose={() => setPerson(null)}
+      range={(
+        <div className="pp-range">
+          {RANGES.map(([k, l]) => <button key={k} type="button" className={`chip ${rg === k ? "on" : ""}`} onClick={() => setRg(k)}>{l}</button>)}
+          {rg === "custom" && (
+            <span className="ep-dates">
+              <input type="date" value={cf} max={T(0)} onChange={e => e.target.value && setCf(e.target.value)} aria-label="From" />
+              <span className="sub">to</span>
+              <input type="date" value={ct} max={T(0)} onChange={e => e.target.value && setCt(e.target.value)} aria-label="To" />
+            </span>
+          )}
+        </div>
+      )} />
   );
 
   return (
@@ -591,15 +603,14 @@ const BUG_ST = { open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progr
 const bugDone = (s) => ["fixed", "verified", "notbug"].includes(s);
 const TASK_ST = { todo: ["To do", "p-amb"], doing: ["Doing", "p-blue"], done: ["Done", "p-ok"] };
 const NOP = "Other work (no project)";
-function PersonWork({ a, work, days, attendance, period, onClose }) {
+function PersonWork({ a, work, loading, period, onClose, range }) {
   const O = useGet(a ? `/accounts/${a.id}/overview` : "");
-  const [open, setOpen] = useState(""), [view, setView] = useState("work"), [showAtt, setShowAtt] = useState(false);
+  const [open, setOpen] = useState(""), [view, setView] = useState("work");
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   if (!a) return null;
   const o = O.data || { bugsFor: [], bugsBy: [], tasks: [] };
   const bugsAll = [...o.bugsFor, ...o.bugsBy];
   const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0);
-  const attDays = attendance.filter(x => x.sessions?.length);
   // every project they touched: work in this period, bugs or tasks
   const names = [...new Set([...work.map(w => w.refName || NOP), ...bugsAll.map(b => b.project || NOP), ...o.tasks.map(t => t.project || NOP)])];
   const projects = names.map(name => {
@@ -628,14 +639,15 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
         <button type="button" className="btn" onClick={exportMe}>Export</button>
       </div>
 
-      <div className="pp-sum">
-        <span><small>Hours</small><b>{h1(hrs)} h</b></span>
-        <span><small>Items</small><b>{work.length}</b></span>
-        <span><small>Projects</small><b>{projects.filter(p => p.name !== NOP).length}</b></span>
-        <span><small>Days checked in</small><b>{attDays.length}</b></span>
-        <span><small>Days submitted</small><b>{days.length}</b></span>
-        <span><small>Bugs open</small><b className={openBugs ? "red" : ""}>{O.loading ? "…" : openBugs}</b></span>
-        <span><small>Tasks open</small><b>{O.loading ? "…" : openTasks}</b></span>
+      {range}
+
+      <div className="pp-tiles">
+        <div><small>Hours logged</small><b>{loading ? "…" : `${h1(hrs)} h`}</b></div>
+        <div><small>Items logged</small><b>{loading ? "…" : work.length}</b></div>
+        <div><small>Projects</small><b>{projects.filter(p => p.name !== NOP).length}</b></div>
+        <div><small>Bugs open</small><b className={openBugs ? "red" : ""}>{O.loading ? "…" : openBugs}</b></div>
+        <div><small>Bugs fixed</small><b className="ok">{O.loading ? "…" : bugsAll.length - openBugs}</b></div>
+        <div><small>Tasks open</small><b>{O.loading ? "…" : openTasks}</b></div>
       </div>
 
       <div className="card"><h3>Projects <small>click a project to see its work, bugs and tasks</small></h3>
@@ -691,21 +703,6 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
         )}
       </div>
 
-      <div className="card"><h3>Attendance <small>{attDays.length} days checked in · {period.toLowerCase()}</small>
-        <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setShowAtt(v => !v)}>{showAtt ? "Hide" : "Show"}</button></h3>
-        {showAtt && (attDays.length || days.length ? (
-          <table className="pl-t"><thead><tr><th>Date</th><th>Check in</th><th>Check out</th><th className="n">Hours logged</th><th>Day submitted</th></tr></thead>
-            <tbody>{[...new Set([...attDays.map(x => x.date), ...days.map(x => x.date)])].sort().reverse().map(dt => {
-              const S = attendance.find(y => y.date === dt)?.sessions || [], last = [...S].reverse().find(x => x.out), op = S.find(x => !x.out), d = days.find(y => y.date === dt);
-              return (
-                <tr key={dt}><td className="nw">{fdw(dt)}</td><td>{S[0] ? tm(S[0].in) : "-"}</td>
-                  <td>{op ? (dt === T(0) ? <span className="pill p-ok">Still in</span> : <span className="pill p-red">No check out</span>) : last ? tm(last.out) : "-"}</td>
-                  <td className="n">{h1(work.filter(w => w.date === dt).reduce((s2, w) => s2 + (w.hrs || 0), 0))} h</td>
-                  <td>{d ? <span className="pill p-ok">Sent {ampm(d.at)}</span> : <span className="pill p-amb">Not submitted</span>}</td></tr>
-              );
-            })}</tbody></table>
-        ) : <div className="empty">No check ins in this period.</div>)}
-      </div>
     </div>
   );
 }
