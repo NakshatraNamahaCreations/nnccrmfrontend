@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 import { billingApi } from "../ProjectBilling/billingMeta";
+import Pager from "../LeadTracker/Pager";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import {
@@ -179,8 +180,12 @@ function WorkTable({ L, client, av, canDelete, onChanged }) {
 /* ───────── TODAY ───────── */
 function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel, load }) {
   const C = active.filter(mineC), mo = monthOf(T(0));
+  const [q, setQ] = useState(""), [show, setShow] = useState("all"), [page, setPage] = useState(0), [per, setPer] = useState(10);
+  // the ads report is sent today for yesterday's numbers (Monday: for Saturday), so both days count
+  const repDays = [T(0), T(-1), ...(parse(T(0)).getDay() === 1 ? [T(-2)] : [])];
+  const repOf = (cid) => D.ads.filter(r => r.cid === cid && repDays.includes(r.date) && hasGoogle(r)).sort((a, b) => (a.sent === b.sent ? b.date.localeCompare(a.date) : a.sent ? -1 : 1))[0] || null;
   const adsC = C.filter(c => c.ads);
-  const sent = adsC.filter(c => D.ads.some(r => r.cid === c.id && r.date === T(0) && r.sent));
+  const sent = adsC.filter(c => repOf(c.id)?.sent);
   const todayW = D.work.filter(w => w.date === T(0) && (who === "all" || w.who === who));
   const hr = new Date().getHours();
   const rows = C.map(c => {
@@ -193,11 +198,18 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
       gM: W.filter(w => w.type === "gmb" && inP(w, mo)).length,
       blM: W.filter(w => w.type === "blog" && inP(w, mo)).length,
       poM: W.filter(w => w.type === "poster" && inP(w, mo)).length,
-      adsDay: c.ads ? D.ads.find(r => r.cid === c.id && r.date === T(0) && hasGoogle(r)) : null,
+      adsDay: c.ads ? repOf(c.id) : null,
     };
   });
   const dayOfMonth = parse(T(0)).getDate();
   const member = (id) => D.team.find(t => t.id === id);
+  const behind = (r) => r.bM < r.bt || r.gM < r.gt || r.blM < (r.c.targets?.blog || 0) || r.poM < (r.c.targets?.poster || 0);
+  const F = rows.filter(r => (!q || r.c.name.toLowerCase().includes(q.toLowerCase()))
+    && (show === "all" || (show === "ads" && r.c.ads && !r.adsDay?.sent) || (show === "behind" && behind(r)) || (show === "done" && !behind(r) && (!r.c.ads || r.adsDay?.sent))));
+  const pages = Math.max(1, Math.ceil(F.length / per)), cur = Math.min(page, pages - 1);
+  const shown = F.slice(cur * per, cur * per + per);
+  // a target of 0: nothing expected, show the count without a colour
+  const Cell = ({ n, t }) => (t > 0 ? <Chk ok={n >= t} late={n < (t * dayOfMonth) / 30 - 1}>{n} of {t}</Chk> : <span className="sub">{n ? `${n} (no target)` : "-"}</span>);
   // A message in the Employee Portal to whoever is behind on this client
   const remind = async (r) => {
     const todo = [];
@@ -229,20 +241,30 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
         <div className="kpi"><span className="l">Ad spend this month</span><span className="v">{inr(rows.reduce((a, r) => a + (r.m ? r.m.spend : 0), 0))}</span><span className="s">{rows.reduce((a, r) => a + (r.m ? r.m.conv : 0), 0)} leads so far</span></div>
       </div>
       <div className="card"><h3>Client checklist for today <small>green done · grey pending · red overdue</small></h3>
+        <div className="ck-f">
+          <input type="search" placeholder="Search client" value={q} onChange={e => { setQ(e.target.value); setPage(0); }} aria-label="Search client" />
+          <select value={show} onChange={e => { setShow(e.target.value); setPage(0); }} aria-label="Show">
+            <option value="all">All clients ({rows.length})</option>
+            <option value="ads">Ads report not sent</option>
+            <option value="behind">Behind on targets</option>
+            <option value="done">All done</option>
+          </select>
+          <span className="sub">{F.length} client{F.length === 1 ? "" : "s"}</span>
+        </div>
         <div className="tw"><table><thead><tr><th>Client</th><th>Team</th><th>Google Ads report</th><th>Backlinks this month</th><th>GMB this month</th><th>Blogs this month</th><th>Posters this month</th><th>Ad budget used</th><th className="r" /></tr></thead><tbody>
-          {rows.map(r => (
+          {shown.map(r => (
             <tr key={r.c.id}>
               <td><button type="button" className="link" onClick={() => { setSel(s => ({ ...s, rc: r.c.id })); setTab("reports"); }}>{r.c.name}</button><span className="sub">{r.c.site}</span></td>
               <td><span className="who">{r.c.members.map(id => av(id))}</span></td>
               <td>{r.c.ads
-                ? r.adsDay?.sent ? <Chk ok>Sent</Chk>
+                ? r.adsDay?.sent ? <Chk ok>Sent{r.adsDay.date !== T(0) ? ` (${fds(r.adsDay.date)})` : ""}</Chk>
                   : r.adsDay ? <button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>
                     : <span className={`pill ${hr >= 18 ? "p-red" : "p-grey"}`}>{hr >= 18 ? "Late" : "Not sent yet"}{member(r.c.ads) ? ` · ${member(r.c.ads).name.split(" ")[0]}` : ""}</span>
                 : <span className="sub">No ads</span>}</td>
-              <td><Chk ok={r.bM >= r.bt} late={r.bM < (r.bt * dayOfMonth) / 30 - 1}>{r.bM} of {r.bt}</Chk></td>
-              <td><Chk ok={r.gM >= r.gt} late={r.gM < (r.gt * dayOfMonth) / 30 - 1}>{r.gM} of {r.gt}</Chk></td>
-              <td><Chk ok={r.blM >= (r.c.targets?.blog || 0)} late={r.blM < ((r.c.targets?.blog || 0) * dayOfMonth) / 30 - 1}>{r.blM} of {r.c.targets?.blog || 0}</Chk></td>
-              <td><Chk ok={r.poM >= (r.c.targets?.poster || 0)}>{r.poM} of {r.c.targets?.poster || 0}</Chk></td>
+              <td><Cell n={r.bM} t={r.bt} /></td>
+              <td><Cell n={r.gM} t={r.gt} /></td>
+              <td><Cell n={r.blM} t={r.c.targets?.blog || 0} /></td>
+              <td><Cell n={r.poM} t={r.c.targets?.poster || 0} /></td>
               <td style={{ minWidth: 150 }}>{r.m && r.c.budget ? (
                 <><span className="ub"><span className={`bar ${pct(r.m.spend, r.c.budget) > pct(dayOfMonth, 30) + 12 ? "red" : ""}`}><i style={{ width: `${Math.min(100, pct(r.m.spend, r.c.budget))}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{pct(r.m.spend, r.c.budget)}%</span></span>
                   <span className="sub">{inr(r.m.spend)} of {inr(r.c.budget)}</span></>
@@ -250,7 +272,9 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
               <td className="r"><button type="button" className="btn sm" onClick={() => remind(r)} title="Message the person responsible in the Employee Portal">Remind</button></td>
             </tr>
           ))}
+          {!shown.length && <tr><td colSpan={9} className="empty">No client matches.</td></tr>}
         </tbody></table></div>
+        {F.length > 10 && <Pager total={F.length} page={cur} per={per} onPage={setPage} onPer={setPer} sizes={[10, 25, 50]} label="clients" top />}
       </div>
       <div className="card"><h3>Logged today <small>{todayW.length} items</small><button type="button" className="btn sm" onClick={() => setTab("work")}>Full work log</button></h3>
         <WorkTable L={todayW.slice(0, 15)} client={client} av={av} onChanged={load} />
@@ -520,7 +544,7 @@ function HistoryView({ D, active, mineC, av, sel, setSel, setTab }) {
 /* ───────── PDF REPORTS ───────── */
 function ReportsView({ D, active, mineC, client, person, av, sel, setSel, who }) {
   const [mode, setMode] = useState("client");
-  const rp = sel.rp || "week";
+  const rp = sel.rp || "month";
   const C = active.filter(mineC);
   const rc = C.some(c => c.id === sel.rc) ? sel.rc : C[0]?.id;
   const c = client(rc);

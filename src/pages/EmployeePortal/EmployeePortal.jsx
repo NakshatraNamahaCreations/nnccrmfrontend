@@ -607,6 +607,7 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
   const O = useGet(a ? `/accounts/${a.id}/overview` : "");
   const PJ = useGet(a ? `/accounts/${a.id}/projects` : "");   // the projects or clients they are on
   const [open, setOpen] = useState(""), [view, setView] = useState("work");
+  const [pq, setPq] = useState(""), [pf, setPf] = useState("all"), [pg, setPg] = useState(0), [pper, setPper] = useState(10);
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   if (!a) return null;
   const o = O.data || { bugsFor: [], bugsBy: [], tasks: [] };
@@ -621,6 +622,9 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
     return { name, W, B, K, assigned: !!on, stage: on?.stage || "", hrs: W.reduce((s, w) => s + (w.hrs || 0), 0), last: W.map(w => w.date).sort().pop() || "",
       bOpen: B.filter(b => !bugDone(b.status)).length, bDone: B.filter(b => bugDone(b.status)).length, kOpen: K.filter(t => t.status !== "done").length };
   }).sort((x, y) => (y.hrs - x.hrs) || (y.bOpen - x.bOpen) || x.name.localeCompare(y.name));
+  const PF = projects.filter(p => (!pq || p.name.toLowerCase().includes(pq.toLowerCase()))
+    && (pf === "all" || (pf === "worked" && p.W.length) || (pf === "bugs" && p.bOpen) || (pf === "tasks" && p.kOpen) || (pf === "idle" && !p.W.length)));
+  const pcur = Math.min(pg, Math.max(0, Math.ceil(PF.length / pper) - 1)), pshown = PF.slice(pcur * pper, pcur * pper + pper);
   const openBugs = bugsAll.filter(b => !bugDone(b.status)).length, openTasks = o.tasks.filter(t => t.status !== "done").length;
   const pick = (name) => { setOpen(open === name ? "" : name); setView("work"); };
   const exportMe = () => {
@@ -656,8 +660,20 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
       <div className="card"><h3>Projects <small>{onList.length} assigned · click a project to see its work, bugs and tasks</small></h3>
         {!projects.length ? <div className="empty">{O.loading ? "Loading…" : "Nothing in this period."}</div> : (
           <div className="pl">
+            <div className="ck-f pl-f">
+              <input type="search" placeholder="Search project" value={pq} onChange={e => { setPq(e.target.value); setPg(0); }} aria-label="Search project" />
+              <select value={pf} onChange={e => { setPf(e.target.value); setPg(0); }} aria-label="Show">
+                <option value="all">All projects ({projects.length})</option>
+                <option value="worked">Worked on in this period</option>
+                <option value="bugs">With open bugs</option>
+                <option value="tasks">With open tasks</option>
+                <option value="idle">No work in this period</option>
+              </select>
+              <span className="sub">{PF.length} shown</span>
+            </div>
             <div className="pl-h"><span>Project</span><span className="n">Items</span><span className="n">Hours</span><span className="n">Bugs open</span><span className="n">Bugs fixed</span><span className="n">Tasks open</span><span>Last worked</span><span /></div>
-            {projects.map(p => {
+            {!pshown.length && <div className="empty">No project matches.</div>}
+            {pshown.map(p => {
               const on = open === p.name;
               return (
                 <div key={p.name} className={`pl-item ${on ? "on" : ""}`}>
@@ -702,6 +718,7 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
                 </div>
               );
             })}
+            {PF.length > 10 && <Pager total={PF.length} page={pcur} per={pper} onPage={setPg} onPer={setPper} sizes={[10, 25, 50]} label="projects" top />}
           </div>
         )}
       </div>
