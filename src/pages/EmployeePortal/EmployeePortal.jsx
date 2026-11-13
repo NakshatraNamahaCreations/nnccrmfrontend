@@ -698,13 +698,15 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
           <div className="tw"><table className="pp-att">
             <thead><tr><th>Date</th><th>Check in</th><th>Check out</th><th className="n">Time in office</th><th className="n">Hours logged</th><th>Day submitted</th><th>Note</th></tr></thead>
             <tbody>{[...new Set([...attDays.map(x => x.date), ...days.map(x => x.date)])].sort().reverse().map(dt => {
-              const x = attendance.find(y => y.date === dt), S = x?.sessions || [], last = [...S].reverse().find(s => s.out), open = S.find(s => !s.out), d = days.find(y => y.date === dt);
-              const mins = S.reduce((m, s) => m + ((s.out ? new Date(s.out) : new Date()) - new Date(s.in)) / 60000, 0);
+              const x = attendance.find(y => y.date === dt), S = x?.sessions || [], last = [...S].reverse().find(s => s.out), d = days.find(y => y.date === dt);
+              const open = S.find(s => !s.out), isToday = dt === T(0);
+              // a past day still open was never checked out: count only the closed sessions
+              const mins = S.reduce((m, s) => m + (s.out ? new Date(s.out) - new Date(s.in) : isToday ? new Date() - new Date(s.in) : 0) / 60000, 0);
               return (
                 <tr key={dt}>
                   <td>{fdw(dt)}</td><td>{S[0] ? <b>{tm(S[0].in)}</b> : <span className="sub">-</span>}</td>
-                  <td>{open ? <span className="pill p-ok">Still in</span> : last ? tm(last.out) : <span className="sub">-</span>}</td>
-                  <td className="n">{S.length ? `${Math.floor(mins / 60)}h ${String(Math.round(mins % 60)).padStart(2, "0")}m` : "-"}</td>
+                  <td>{open ? (isToday ? <span className="pill p-ok">Still in</span> : <span className="pill p-red">No check out</span>) : last ? tm(last.out) : <span className="sub">-</span>}</td>
+                  <td className="n">{S.length && mins > 0 ? `${Math.floor(mins / 60)}h ${String(Math.round(mins % 60)).padStart(2, "0")}m` : "-"}</td>
                   <td className="n">{h1(work.filter(w => w.date === dt).reduce((s2, w) => s2 + (w.hrs || 0), 0))} h</td>
                   <td>{d ? <span className="pill p-ok">Sent {ampm(d.at)}</span> : <span className="pill p-amb">Not submitted</span>}</td>
                   <td className="sub">{d ? [d.note, d.plan && `Tomorrow: ${d.plan}`].filter(Boolean).join(" · ") : ""}</td>
@@ -720,22 +722,30 @@ function PersonWork({ a, work, days, attendance, period, onClose }) {
             <select value={proj} onChange={e => setProj(e.target.value)} aria-label="Project"><option value="">All projects</option>{projects.map(p => <option key={p.name}>{p.name}</option>)}</select>
             <select value={ty} onChange={e => setTy(e.target.value)} aria-label="Work type"><option value="">All work types</option>{types.map(k => <option key={k} value={k}>{TY[k] || k}</option>)}</select>
           </span></h3>
-        {dates.length ? dates.map(dt => {
-          const L = shown.filter(w => w.date === dt);
-          return (
-            <div key={dt} className="ep-pday">
-              <div className="ep-pday-h"><b>{fdw(dt)}</b><span className="sub">{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h · {L.length} items</span></div>
-              <div className="ll flat">{L.map(e => (
-                <div key={e._id}>
-                  <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
-                    <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
-                    {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}<WorkFiles e={e} /></span>
-                  <span className="num">{h1(e.hrs)} h</span>
-                </div>
-              ))}{!L.length && <div className="empty">Nothing logged.</div>}</div>
-            </div>
-          );
-        }) : <div className="empty">Nothing logged{proj || ty ? " for this filter" : " in this period"}.</div>}
+        {dates.some(dt => shown.some(w => w.date === dt)) ? (
+          <div className="tw"><table className="pp-work">
+            <thead><tr><th>Date</th><th>Work type</th><th>What was done</th><th>Project or client</th><th>Details</th><th>Link or files</th><th className="n">Hours</th></tr></thead>
+            {dates.filter(dt => shown.some(w => w.date === dt)).map(dt => {
+              const L = shown.filter(w => w.date === dt);
+              return (
+                <tbody key={dt}>
+                  <tr className="pp-dayrow"><td colSpan={6}><b>{fdw(dt)}</b> <span className="sub">{L.length} item{L.length > 1 ? "s" : ""}</span></td><td className="n"><b>{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h</b></td></tr>
+                  {L.map(e => (
+                    <tr key={e._id}>
+                      <td className="sub">{fd(dt)}</td>
+                      <td><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <span className="pill p-amb" style={{ marginLeft: 4 }}>Extra</span>}</td>
+                      <td className="pp-what">{e.title}</td>
+                      <td>{e.refName || "-"}</td>
+                      <td className="sub">{metaTxt(e) || "-"}</td>
+                      <td className="pp-links">{e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer" title={e.url}>Open link</a>}<WorkFiles e={e} />{!e.url && !e.meta?.files?.length && "-"}</td>
+                      <td className="n">{h1(e.hrs)} h</td>
+                    </tr>
+                  ))}
+                </tbody>
+              );
+            })}
+          </table></div>
+        ) : <div className="empty">Nothing logged{proj || ty ? " for this filter" : " in this period"}.</div>}
       </div>
     </div>
   );

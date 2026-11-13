@@ -8,7 +8,7 @@ import {
   seoApi, T, ds, fd, fds, fdw, inr, inr2, num, pct, initials, waPhone, TYPES, ROLE,
   weekOf, monthOf, period, PER, inP, workdaysIn, adsAgg, kwStat, posTxt, posVal, dist, BUCKETS, downloadCsv, copy, greet, parse, addD,
 } from "./seoUtil";
-import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm , TeamPick } from "./SeoForms";
+import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm } from "./SeoForms";
 import "./SeoTeam.css";
 
 const TABS = [["today", "Today"], ["work", "Work log"], ["ads", "Google Ads"], ["meta", "Meta Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
@@ -746,12 +746,13 @@ function ClientsView({ D, setModal, load }) {
     };
     rd.readAsDataURL(file);
   };
-  const Num = ({ c, k, step = 1 }) => {
+  // read only here: Edit changes them
+  const Num = ({ c, k }) => {
     const top = k === "budget" || k === "metaBudget";
-    const v = top ? c[k] : c.targets?.[k];
-    return <input className="mini num" type="number" min="0" step={step} defaultValue={v} key={`${c.id}${k}${v}`} aria-label={k}
-      onBlur={e => Number(e.target.value) !== Number(v) && save(c, top ? { [k]: Number(e.target.value) } : { targets: { [k]: Number(e.target.value) } })} />;
+    const v = Number(top ? c[k] : c.targets?.[k]) || 0;
+    return <span className="cl-num">{top ? (v ? `₹${v.toLocaleString("en-IN")}` : "-") : v}</span>;
   };
+  const nameOf = (id) => D.team.find(t => String(t.id) === String(id))?.name;
   return (
     <>
       <h2 className="t">Clients and settings<span>.</span></h2>
@@ -776,10 +777,10 @@ function ClientsView({ D, setModal, load }) {
           {D.clients.map(c => (
             <tr key={c.id} style={c.isActive === false ? { opacity: 0.55 } : undefined}>
               <td><b style={{ fontWeight: 500 }}>{c.name}</b><span className="sub">{c.site || "no website"} · since {fds(c.start)}{c.lead ? " · CRM lead" : ""}</span></td>
-              <td><TeamPick D={D} value={c.members} onChange={v => save(c, { members: v })} compact /></td>
+              <td><span className="cl-team">{c.members.map(nameOf).filter(Boolean).map(n => <span key={n}>{n}</span>)}{!c.members.some(nameOf) && <span className="sub">No one yet</span>}</span></td>
               <td className="r"><Num c={c} k="backlink" /></td><td className="r"><Num c={c} k="blog" /></td><td className="r"><Num c={c} k="gmb" /></td><td className="r"><Num c={c} k="poster" /></td>
-              <td className="r"><Num c={c} k="budget" step={1000} /></td>
-              <td className="r"><Num c={c} k="metaBudget" step={1000} /></td>
+              <td className="r"><Num c={c} k="budget" /></td>
+              <td className="r"><Num c={c} k="metaBudget" /></td>
               <td><select className={`st-sel ${c.isActive === false ? "off" : "on"}`} value={c.isActive === false ? "0" : "1"} aria-label={`Status of ${c.name}`}
                 title="Inactive clients are hidden from the team in the Employee Portal"
                 onChange={e => save(c, { isActive: e.target.value === "1" })}><option value="1">Active</option><option value="0">Inactive</option></select></td>

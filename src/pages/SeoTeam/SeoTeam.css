@@ -182,3 +182,8 @@
 .tchip button { border: 0; background: transparent; color: #64748B; cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; }
 .span3 { grid-column: span 3; }
 @media (max-width: 800px) { .span3 { grid-column: auto; } }
+
+/* Clients and settings: read-only values (Edit changes them) */
+.cl-num { font-variant-numeric: tabular-nums; font-weight: 600; color: #0F172A; }
+.cl-team { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-team > span:not(.sub) { background: #EEF4FF; color: #1D4ED8; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; white-space: nowrap; }
