@@ -16,19 +16,19 @@ import { markSeen, fetchPortalCounts } from "../../utils/portalSeen";
 const papi = (path, opts) => billingApi(`/portal/admin${path}`, opts);
 
 const ROLES = {
-  seo: ["SEO analyst", "Digital Marketing", "#0891B2"], seox: ["SEO expert", "Digital Marketing", "#0E7490"], ads: ["Google Ads expert", "Digital Marketing", "#D97706"], gfx: ["Graphic designer", "Design", "#DB2777"],
+  seo: ["SEO analyst", "Digital Marketing", "#0891B2"], seox: ["SEO expert", "Digital Marketing", "#0E7490"], ads: ["Google Ads expert", "Digital Marketing", "#D97706"], gfx: ["Graphic designer", "Design", "#DB2777"], vid: ["Video editor", "Design", "#9333EA"],
   app: ["App developer", "Development", "#2563EB"], web: ["Website developer", "Development", "#0D9488"], back: ["Backend developer", "Development", "#4F46E5"], full: ["Full stack developer", "Development", "#0369A1"],
   ux: ["UI/UX designer", "Design", "#DB2777"], test: ["Tester", "Testing", "#7C3AED"], other: ["Team member", "Development", "#64748B"], acc: ["Accountant", "Accounts", "#475569"],
 };
-const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seox", "ads", "gfx"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test", "other"]], acc: ["Accounts", ["acc"]] };
+const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seox", "ads", "gfx", "vid"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test", "other"]], acc: ["Accounts", ["acc"]] };
 const PROJECT_ROLES = ["app", "web", "back", "full", "ux", "test", "other"];   // put on projects
-const SEO_ROLES = ["seo", "seox", "ads", "gfx"];                             // put on SEO clients
+const SEO_ROLES = ["seo", "seox", "ads", "gfx", "vid"];                             // put on SEO clients
 const DEPTS = ["Development", "Design", "Testing", "Digital Marketing", "Accounts"];
 const BRANCHES = ["Bangalore", "Mysore", "Mumbai"];
 const TY = {
   backlink: "Backlinks", blog: "Blog published", gmb: "GMB post", onpage: "On-page SEO", optimise: "Campaign or ad changes", negative: "Negative keywords", newad: "New ad or ad group",
   feature: "Feature or module", page: "Page built", build: "App build", deploy: "Deployment", bugfix: "Bug fixed", screen: "Screens designed", revision: "Design revision",
-  poster: "Poster or creative", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
+  poster: "Poster design", logo: "Logo design", vcard: "Visiting card", brochure: "Brochure design", corpvideo: "Corporate video", instavideo: "Instagram ad video", motion: "Motion graphics or explainer video", test: "Test run", bug: "Bug raised", invoice: "Invoice or payment", meeting: "Meeting", other: "Other work", adsreport: "Daily ads report",
   webcontent: "Website content", blogcontent: "Blog content written", landing: "Landing page content", campaign: "Campaign setup",
   social: "Social media posts", position: "Position tracking", monthly: "Monthly report", docs: "Documentation or reporting",
   kwresearch: "Keyword research", metaads: "Meta Ads", tracking: "GSC / GA4 / GTM setup",
@@ -215,9 +215,9 @@ function People({ A }) {
         <div className="kpi"><span className="l">Accounts</span><span className="v">{L.length}</span><span className="s">{L.filter(a => a.status === "active").length} active</span></div>
         <div className="kpi"><span className="l">Waiting for approval</span><span className={`v ${L.some(a => a.status === "pending") ? "amb" : ""}`}>{L.filter(a => a.status === "pending").length}</span><span className="s">approve them below</span></div>
         <div className="kpi"><span className="l">Signed in today</span><span className="v">{L.filter(a => dayOf(a.lastLogin) === T(0)).length}</span></div>
-        <div className="kpi"><span className="l">Disabled</span><span className="v">{L.filter(a => a.status === "disabled").length}</span></div>
+        <div className="kpi"><span className="l">Inactive</span><span className="v">{L.filter(a => a.status === "disabled").length}</span></div>
       </div>
-      <div className="filters">{[["all", "All"], ["pending", "Waiting for approval"], ["active", "Active"], ["disabled", "Disabled"]].map(([k, t]) => (
+      <div className="filters">{[["all", "All"], ["pending", "Waiting for approval"], ["active", "Active"], ["disabled", "Inactive"]].map(([k, t]) => (
         <button key={k} type="button" className={`chip ${f === k ? "on" : ""}`} onClick={() => { setF(k); setPage(0); }}>{t}</button>
       ))}<span className="sp" /><button type="button" className="btn pri" onClick={() => setAdding(true)}><UserPlus size={14} /> Add employee</button></div>
       <div className="card"><div className="tw"><table className="ep-emps">
@@ -237,15 +237,17 @@ function People({ A }) {
                 : anyRole(a, SEO_ROLES) ? <span className="sub">Not assigned yet · <Link to="/seo-team">assign</Link></span>
                 : <span className="sub">Not assigned yet · <button type="button" className="link" onClick={() => setWorksFor(a)}>assign</button></span>}</td>
               <td>{when(a.lastLogin)}<span className="sub">{a.logins} sign ins</span></td>
-              <td>{a.status === "active" ? <span className="pill p-ok">Active</span> : a.status === "pending" ? <span className="pill p-amb">Waiting</span> : <span className="pill p-red">Disabled</span>}
+              <td>{a.status === "pending" ? <span className="pill p-amb">Waiting</span>
+                : <select className={`st-sel ${a.status === "active" ? "on" : "off"}`} value={a.status} aria-label={`Status of ${a.name}`} title="Inactive employees cannot sign in to the Employee Portal"
+                    onChange={e => (e.target.value === "active" ? upd(a, { status: "active" }, `${a.name} is active`) : setAsk({ kind: "disable", a }))}>
+                    <option value="active">Active</option><option value="disabled">Inactive</option></select>}
                 {a.mustChange && <span className="sub">temporary password</span>}</td>
               <td className="ep-act">
                 {a.status === "pending" && <button type="button" className="btn sm pri" onClick={() => upd(a, { status: "active" }, `${a.name} approved`)}>Approve</button>}
-                {a.status === "disabled" && <button type="button" className="btn sm" onClick={() => upd(a, { status: "active" }, "Account enabled")}>Enable</button>}
                 <button type="button" className="btn sm" title="Edit" aria-label={`Edit ${a.name}`} onClick={() => setEditFor(a)}><Pencil size={13} /></button>
                 {a.status !== "pending" && <button type="button" className="btn sm" title="Set a new password" onClick={() => { setPw({ v: "", show: false, busy: false }); setPwFor(a); }}>Password</button>}
                 {a.status !== "pending" && <button type="button" className="btn sm" onClick={() => setAsk({ kind: "reset", a })}>Reset</button>}
-                {a.status !== "disabled" && <button type="button" className="btn sm late" onClick={() => setAsk({ kind: "disable", a })}>{a.status === "pending" ? "Reject" : "Disable"}</button>}
+                {a.status === "pending" && <button type="button" className="btn sm late" onClick={() => setAsk({ kind: "disable", a })}>Reject</button>}
                 <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${a.name}`} onClick={() => setAsk({ kind: "delete", a })}><Trash2 size={13} /></button>
               </td>
             </tr>
@@ -262,14 +264,14 @@ function People({ A }) {
       {worksFor && <WorksModal a={worksFor} onClose={() => setWorksFor(null)} onDone={() => { setWorksFor(null); A.reload(); }} />}
 
       {ask && (
-        <Modal title={ask.kind === "reset" ? `Reset ${ask.a.name}'s password?` : ask.kind === "delete" ? `Delete ${ask.a.name}?` : `${ask.a.status === "pending" ? "Reject" : "Disable"} ${ask.a.name}?`} onClose={() => setAsk(null)}>
+        <Modal title={ask.kind === "reset" ? `Reset ${ask.a.name}'s password?` : ask.kind === "delete" ? `Delete ${ask.a.name}?` : `${ask.a.status === "pending" ? "Reject" : "Make"} ${ask.a.name}${ask.a.status === "pending" ? "" : " inactive"}?`} onClose={() => setAsk(null)}>
           <p>{ask.kind === "reset" ? "You get a temporary password to share. They choose a new one when they sign in."
-            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "seox", "ads", "gfx"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "every project they are on"}. Work they already logged stays in the history. This cannot be undone.`
+            : ask.kind === "delete" ? `Their Employee Portal login is deleted, and they are removed from ${["seo", "seox", "ads", "gfx", "vid"].includes(ask.a.role) ? "the SEO & Ads Team (marked inactive, taken off clients)" : "every project they are on"}. Work they already logged stays in the history. This cannot be undone.`
               : "They can no longer sign in to the Employee Portal. Their logged work stays."}</p>
           <div className="ep-row">
             <button type="button" className="btn" onClick={() => setAsk(null)}>Cancel</button>
-            <button type="button" className={`btn ${ask.kind === "reset" ? "pri" : "late"}`} onClick={() => { const { kind, a } = ask; setAsk(null); if (kind === "reset") reset(a); else if (kind === "delete") remove(a); else upd(a, { status: "disabled" }, "Account disabled"); }}>
-              {ask.kind === "reset" ? "Reset password" : ask.kind === "delete" ? "Delete" : ask.a.status === "pending" ? "Reject" : "Disable"}</button>
+            <button type="button" className={`btn ${ask.kind === "reset" ? "pri" : "late"}`} onClick={() => { const { kind, a } = ask; setAsk(null); if (kind === "reset") reset(a); else if (kind === "delete") remove(a); else upd(a, { status: "disabled" }, `${a.name} is inactive`); }}>
+              {ask.kind === "reset" ? "Reset password" : ask.kind === "delete" ? "Delete" : ask.a.status === "pending" ? "Reject" : "Make inactive"}</button>
           </div>
         </Modal>
       )}
@@ -485,6 +487,11 @@ function Work({ accounts, today }) {
     downloadCsv(`work-log_${from}_to_${to}.csv`, rows);
   };
 
+  if (person && acc(person)) return (
+    <PersonWork a={acc(person)} work={d.work.filter(w => String(w.account) === person)} days={d.days.filter(x => String(x.account) === person)}
+      attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={period} onClose={() => setPerson(null)} />
+  );
+
   return (
     <>
       <div className="filters">
@@ -572,41 +579,164 @@ function Work({ accounts, today }) {
           ) : <div className="empty">No active employees in this team yet.</div>}
         </div>
       )}
-      {person && <PersonWork a={acc(person)} work={work.filter(w => String(w.account) === person)} days={days.filter(x => String(x.account) === person)}
-        attendance={(d.attendance || []).filter(x => String(x.account) === person)} period={period} onClose={() => setPerson(null)} />}
       {assign && <AssignTask accounts={accounts.filter(a => a.status === "active" && (!roles || anyRole(a, roles)))} init={assign} onClose={() => setAssign(null)} onDone={() => setAssign(null)} />}
     </>
   );
 }
 
-// Everything one employee logged in the period, day by day, with their check in / out and day note
+// One employee's page: totals, work per project, bugs, tasks, attendance and every item day by day
+const BUG_ST = { open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progress: ["In progress", "p-amb"], info: ["Needs info", "p-amb"], fixed: ["Fixed, to verify", "p-blue"], verified: ["Verified", "p-ok"], notbug: ["Not a bug", "p-grey"] };
+const bugDone = (s) => ["fixed", "verified", "notbug"].includes(s);
+const TASK_ST = { todo: ["To do", "p-amb"], doing: ["Doing", "p-blue"], done: ["Done", "p-ok"] };
 function PersonWork({ a, work, days, attendance, period, onClose }) {
-  const dates = [...new Set([...work.map(w => w.date), ...days.map(x => x.date), ...attendance.filter(x => x.sessions?.length).map(x => x.date)])].sort().reverse();
-  const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0), extra = work.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0);
+  const O = useGet(a ? `/accounts/${a.id}/overview` : "");
+  const [proj, setProj] = useState(""), [ty, setTy] = useState(""), [bugTab, setBugTab] = useState("for");
+  useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   if (!a) return null;
+  const o = O.data || { bugsFor: [], bugsBy: [], tasks: [] };
+  const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0), extra = work.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0);
+  const attDays = attendance.filter(x => x.sessions?.length);
+  const firstIn = attDays.map(x => new Date(x.sessions[0].in)).map(d => d.getHours() * 60 + d.getMinutes());
+  const avgIn = firstIn.length ? Math.round(firstIn.reduce((s, m) => s + m, 0) / firstIn.length) : null;
+  const mm = (m) => `${(Math.floor(m / 60) % 12) || 12}:${String(m % 60).padStart(2, "0")} ${m < 720 ? "am" : "pm"}`;
+  // work per project / client
+  const P = {};
+  work.forEach(w => {
+    const k = w.refName || "No project";
+    const p = P[k] || (P[k] = { name: k, n: 0, hrs: 0, types: {}, last: "" });
+    p.n++; p.hrs += w.hrs || 0; p.types[w.type] = (p.types[w.type] || 0) + 1; if (w.date > p.last) p.last = w.date;
+  });
+  const projects = Object.values(P).sort((x, y) => y.hrs - x.hrs);
+  const bugsByProj = (name) => o.bugsFor.filter(b => (b.project || "No project") === name);
+  const types = [...new Set(work.map(w => w.type))];
+  const shown = work.filter(w => (!proj || (w.refName || "No project") === proj) && (!ty || w.type === ty));
+  const dates = [...new Set([...shown.map(w => w.date), ...(proj || ty ? [] : [...days.map(x => x.date), ...attDays.map(x => x.date)])])].sort().reverse();
+  const openFor = o.bugsFor.filter(b => !bugDone(b.status)), fixedFor = o.bugsFor.filter(b => bugDone(b.status));
+  const bugs = bugTab === "for" ? o.bugsFor : o.bugsBy;
+  const openTasks = o.tasks.filter(t => t.status !== "done");
+  const exportMe = () => {
+    const rows = [[a.name, roleNames(a), period], [], ["Project", "Items", "Hours", "Bugs open", "Bugs fixed", "Last worked"]];
+    projects.forEach(p => { const B = bugsByProj(p.name); rows.push([p.name, p.n, h1(p.hrs), B.filter(b => !bugDone(b.status)).length, B.filter(b => bugDone(b.status)).length, p.last]); });
+    rows.push([], ["Date", "Work type", "Title", "Project / client", "Details", "Hours", "Extra", "Link"]);
+    [...work].sort((x, y) => (x.date < y.date ? -1 : 1)).forEach(e => rows.push([e.date, TY[e.type] || e.type, e.title, e.refName || "", metaTxt(e), h1(e.hrs), e.meta?.extra ? "Yes" : "", e.url || ""]));
+    if (o.bugsFor.length) { rows.push([], ["Bugs given to them", "Raised on", "Project", "Severity", "Status", "Raised by"]); o.bugsFor.forEach(b => rows.push([`${b.code} ${b.title}`, b.date, b.project, b.sev, BUG_ST[b.status]?.[0] || b.status, b.by])); }
+    rows.push([], ["Date", "Check in", "Check out", "Day submitted"]);
+    [...attDays].sort((x, y) => (x.date < y.date ? -1 : 1)).forEach(x => { const last = [...x.sessions].reverse().find(s => s.out); const d = days.find(y => y.date === x.date); rows.push([x.date, tm(x.sessions[0].in), last ? tm(last.out) : "", d ? ampm(d.at) : ""]); });
+    downloadCsv(`${a.name.replace(/[^a-z0-9]+/gi, "-")}_${period.replace(/[^a-z0-9]+/gi, "-")}.csv`, rows);
+  };
+
   return (
-    <Modal title={`${a.name} · ${period}`} onClose={onClose} wide>
-      <p className="sub" style={{ marginTop: 0 }}>{roleNames(a)} · {work.length} items · {h1(hrs)} h{extra ? ` (${h1(extra)} h extra)` : ""} · {days.length} days submitted</p>
-      {dates.length ? dates.map(dt => {
-        const L = work.filter(w => w.date === dt), day = days.find(x => x.date === dt), att = attendance.find(x => x.date === dt);
-        return (
-          <div key={dt} className="ep-pday">
-            <div className="ep-pday-h"><b>{fd(dt)}</b>
-              <span className="sub">{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h · {L.length} items{att?.sessions?.length ? ` · ${attTxt(att.sessions)}` : ""}</span>
-              {day ? <span className="pill p-ok">Sent {ampm(day.at)}</span> : <span className="pill p-amb">Not submitted</span>}</div>
-            {day && (day.note || day.plan) && <div className="sub ep-pnote">{day.note}{day.plan ? `${day.note ? " · " : ""}Tomorrow: ${day.plan}` : ""}</div>}
-            <div className="ll flat">{L.map(e => (
-              <div key={e._id}>
-                <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
-                  <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
-                  {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}<WorkFiles e={e} /></span>
-                <span className="num">{h1(e.hrs)} h</span>
+    <div className="pp">
+      <div className="pp-top">
+        <button type="button" className="btn" onClick={onClose}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Back to work log</button>
+        <div className="pp-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">{roleNames(a)} · {period}</span></span></div>
+        <span className="sp" />
+        <button type="button" className="btn" onClick={exportMe}>Export</button>
+      </div>
+
+      <div className="kpis pp-kpis">
+        <div className="kpi"><span className="l">Hours logged</span><span className="v">{h1(hrs)} h</span><span className="s">{extra ? `${h1(extra)} h extra` : "no extra hours"}</span></div>
+        <div className="kpi"><span className="l">Items logged</span><span className="v">{work.length}</span><span className="s">{types.length} kinds of work</span></div>
+        <div className="kpi"><span className="l">Projects worked on</span><span className="v">{projects.filter(p => p.name !== "No project").length}</span></div>
+        <div className="kpi"><span className="l">Days checked in</span><span className="v">{attDays.length}</span><span className="s">{avgIn != null ? `usually in by ${mm(avgIn)}` : "no check ins"}</span></div>
+        <div className="kpi"><span className="l">Days submitted</span><span className="v">{days.length}</span></div>
+        {(o.bugsFor.length > 0 || o.bugsBy.length === 0) && <div className="kpi"><span className="l">Bugs given to them</span><span className={`v ${openFor.length ? "red" : ""}`}>{openFor.length} open</span><span className="s">{fixedFor.length} fixed of {o.bugsFor.length}</span></div>}
+        {o.bugsBy.length > 0 && <div className="kpi"><span className="l">Bugs they raised</span><span className="v">{o.bugsBy.length}</span><span className="s">{o.bugsBy.filter(b => !bugDone(b.status)).length} still open</span></div>}
+        <div className="kpi"><span className="l">Tasks</span><span className={`v ${openTasks.some(t => t.due < T(0)) ? "red" : ""}`}>{openTasks.length} open</span><span className="s">{o.tasks.length - openTasks.length} done</span></div>
+      </div>
+
+      <div className="card"><h3>Project wise <small>{period.toLowerCase()} · click a project to see only its work</small></h3>
+        {projects.length ? (
+          <div className="tw"><table className="pp-proj">
+            <thead><tr><th>Project or client</th><th className="n">Items</th><th className="n">Hours</th><th>Work done</th><th className="n">Bugs open</th><th className="n">Bugs fixed</th><th>Last worked</th></tr></thead>
+            <tbody>{projects.map(p => {
+              const B = bugsByProj(p.name), on = proj === p.name;
+              return (
+                <tr key={p.name} className={on ? "on" : ""} onClick={() => setProj(on ? "" : p.name)}>
+                  <td><b>{p.name}</b></td><td className="n">{p.n}</td><td className="n"><b>{h1(p.hrs)} h</b></td>
+                  <td><span className="pp-types">{Object.entries(p.types).sort((x, y) => y[1] - x[1]).map(([k, n]) => <span key={k}>{TY[k] || k} <b>{n}</b></span>)}</span></td>
+                  <td className="n">{B.filter(b => !bugDone(b.status)).length || "-"}</td><td className="n">{B.filter(b => bugDone(b.status)).length || "-"}</td>
+                  <td>{fd(p.last)}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table></div>
+        ) : <div className="empty">Nothing logged in this period.</div>}
+      </div>
+
+      <div className="pp-grid">
+        <div className="card"><h3>Bugs <small>all dates</small>
+          <span className="pp-seg">
+            <button type="button" className={bugTab === "for" ? "on" : ""} onClick={() => setBugTab("for")}>Given to them ({o.bugsFor.length})</button>
+            <button type="button" className={bugTab === "by" ? "on" : ""} onClick={() => setBugTab("by")}>Raised by them ({o.bugsBy.length})</button>
+          </span></h3>
+          {O.loading ? <div className="empty">Loading…</div> : bugs.length ? (
+            <div className="pp-list">{bugs.slice(0, 200).map(b => (
+              <div key={b.id} className="pp-li">
+                <span className="x"><b>{b.code ? `${b.code} · ` : ""}{b.title}</b>
+                  <span className="sub">{[b.project, b.mod, b.sev, bugTab === "for" ? b.by && `raised by ${b.by}` : b.to && `to ${b.to}`, `raised ${fd(b.date)}`].filter(Boolean).join(" · ")}</span></span>
+                <span className={`pill ${BUG_ST[b.status]?.[1] || "p-grey"}`}>{BUG_ST[b.status]?.[0] || b.status}</span>
               </div>
-            ))}{!L.length && <div className="empty">Nothing logged.</div>}</div>
-          </div>
-        );
-      }) : <div className="empty">Nothing logged in this period.</div>}
-    </Modal>
+            ))}</div>
+          ) : <div className="empty">{bugTab === "for" ? "No bugs have been given to them." : "They have not raised any bugs."}</div>}
+        </div>
+        <div className="card"><h3>Tasks <small>given by the admin</small></h3>
+          {O.loading ? <div className="empty">Loading…</div> : o.tasks.length ? (
+            <div className="pp-list">{o.tasks.slice(0, 100).map(t => (
+              <div key={t.id} className="pp-li">
+                <span className="x"><b>{t.title}</b><span className="sub">{[t.project, `due ${fd(t.due)}`, t.from && t.from !== "me" ? `from ${t.from}` : "", t.doneOn ? `done ${fd(t.doneOn)}` : ""].filter(Boolean).join(" · ")}</span></span>
+                <span className={`pill ${t.status !== "done" && t.due < T(0) ? "p-red" : TASK_ST[t.status]?.[1]}`}>{t.status !== "done" && t.due < T(0) ? "Overdue" : TASK_ST[t.status]?.[0]}</span>
+              </div>
+            ))}</div>
+          ) : <div className="empty">No tasks given.</div>}
+        </div>
+      </div>
+
+      <div className="card"><h3>Attendance <small>{period.toLowerCase()}</small></h3>
+        {attDays.length || days.length ? (
+          <div className="tw"><table className="pp-att">
+            <thead><tr><th>Date</th><th>Check in</th><th>Check out</th><th className="n">Time in office</th><th className="n">Hours logged</th><th>Day submitted</th><th>Note</th></tr></thead>
+            <tbody>{[...new Set([...attDays.map(x => x.date), ...days.map(x => x.date)])].sort().reverse().map(dt => {
+              const x = attendance.find(y => y.date === dt), S = x?.sessions || [], last = [...S].reverse().find(s => s.out), open = S.find(s => !s.out), d = days.find(y => y.date === dt);
+              const mins = S.reduce((m, s) => m + ((s.out ? new Date(s.out) : new Date()) - new Date(s.in)) / 60000, 0);
+              return (
+                <tr key={dt}>
+                  <td>{fdw(dt)}</td><td>{S[0] ? <b>{tm(S[0].in)}</b> : <span className="sub">-</span>}</td>
+                  <td>{open ? <span className="pill p-ok">Still in</span> : last ? tm(last.out) : <span className="sub">-</span>}</td>
+                  <td className="n">{S.length ? `${Math.floor(mins / 60)}h ${String(Math.round(mins % 60)).padStart(2, "0")}m` : "-"}</td>
+                  <td className="n">{h1(work.filter(w => w.date === dt).reduce((s2, w) => s2 + (w.hrs || 0), 0))} h</td>
+                  <td>{d ? <span className="pill p-ok">Sent {ampm(d.at)}</span> : <span className="pill p-amb">Not submitted</span>}</td>
+                  <td className="sub">{d ? [d.note, d.plan && `Tomorrow: ${d.plan}`].filter(Boolean).join(" · ") : ""}</td>
+                </tr>
+              );
+            })}</tbody>
+          </table></div>
+        ) : <div className="empty">No check ins in this period.</div>}
+      </div>
+
+      <div className="card"><h3>Work, day by day <small>{shown.length} items · {h1(shown.reduce((s, w) => s + (w.hrs || 0), 0))} h</small>
+          <span className="pp-f">
+            <select value={proj} onChange={e => setProj(e.target.value)} aria-label="Project"><option value="">All projects</option>{projects.map(p => <option key={p.name}>{p.name}</option>)}</select>
+            <select value={ty} onChange={e => setTy(e.target.value)} aria-label="Work type"><option value="">All work types</option>{types.map(k => <option key={k} value={k}>{TY[k] || k}</option>)}</select>
+          </span></h3>
+        {dates.length ? dates.map(dt => {
+          const L = shown.filter(w => w.date === dt);
+          return (
+            <div key={dt} className="ep-pday">
+              <div className="ep-pday-h"><b>{fdw(dt)}</b><span className="sub">{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h · {L.length} items</span></div>
+              <div className="ll flat">{L.map(e => (
+                <div key={e._id}>
+                  <span className="x"><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <> <span className="pill p-amb">Extra work</span></>} <b>{e.title}</b>
+                    <span className="sub">{[e.refName, metaTxt(e)].filter(Boolean).join(" · ")}</span>
+                    {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}<WorkFiles e={e} /></span>
+                  <span className="num">{h1(e.hrs)} h</span>
+                </div>
+              ))}{!L.length && <div className="empty">Nothing logged.</div>}</div>
+            </div>
+          );
+        }) : <div className="empty">Nothing logged{proj || ty ? " for this filter" : " in this period"}.</div>}
+      </div>
+    </div>
   );
 }
 

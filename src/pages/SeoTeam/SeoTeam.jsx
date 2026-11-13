@@ -771,8 +771,8 @@ function ClientsView({ D, setModal, load }) {
         <p className="sub" style={{ padding: "8px 16px 12px", margin: 0 }}>The team is everyone in Employee Portal with an SEO analyst, SEO expert, Google Ads expert or graphic designer role. Change roles there; add any of them to a client below; everyone on a client's team does its work.{D.team.some(t => !t.portal) ? ` ${D.team.filter(t => !t.portal).length} older entr${D.team.filter(t => !t.portal).length === 1 ? "y" : "ies"} without a portal login ${D.team.filter(t => !t.portal).length === 1 ? "is" : "are"} hidden; their past work is kept.` : ""}</p>
       </div>
 
-      <div className="card"><h3>Clients <small>{D.clients.filter(c => c.isActive !== false).length} active</small><button type="button" className="btn sm pri" onClick={() => setModal({ kind: "client" })}>+ Add client</button></h3>
-        <div className="tw"><table><thead><tr><th>Client</th><th style={{ minWidth: 220 }}>Team</th><th className="r">Backlinks / month</th><th className="r">Blogs / month</th><th className="r">GMB / month</th><th className="r">Posters / month</th><th className="r">Google Ads budget / month</th><th className="r">Meta Ads budget / month</th><th className="r" /></tr></thead><tbody>
+      <div className="card"><h3>Clients <small>{D.clients.filter(c => c.isActive !== false).length} active · {D.clients.filter(c => c.isActive === false).length} inactive · inactive clients are hidden in the Employee Portal</small><button type="button" className="btn sm pri" onClick={() => setModal({ kind: "client" })}>+ Add client</button></h3>
+        <div className="tw"><table><thead><tr><th>Client</th><th style={{ minWidth: 220 }}>Team</th><th className="r">Backlinks / month</th><th className="r">Blogs / month</th><th className="r">GMB / month</th><th className="r">Posters / month</th><th className="r">Google Ads budget / month</th><th className="r">Meta Ads budget / month</th><th>Status</th><th className="r" /></tr></thead><tbody>
           {D.clients.map(c => (
             <tr key={c.id} style={c.isActive === false ? { opacity: 0.55 } : undefined}>
               <td><b style={{ fontWeight: 500 }}>{c.name}</b><span className="sub">{c.site || "no website"} · since {fds(c.start)}{c.lead ? " · CRM lead" : ""}</span></td>
@@ -780,15 +780,16 @@ function ClientsView({ D, setModal, load }) {
               <td className="r"><Num c={c} k="backlink" /></td><td className="r"><Num c={c} k="blog" /></td><td className="r"><Num c={c} k="gmb" /></td><td className="r"><Num c={c} k="poster" /></td>
               <td className="r"><Num c={c} k="budget" step={1000} /></td>
               <td className="r"><Num c={c} k="metaBudget" step={1000} /></td>
+              <td><select className={`st-sel ${c.isActive === false ? "off" : "on"}`} value={c.isActive === false ? "0" : "1"} aria-label={`Status of ${c.name}`}
+                title="Inactive clients are hidden from the team in the Employee Portal"
+                onChange={e => save(c, { isActive: e.target.value === "1" })}><option value="1">Active</option><option value="0">Inactive</option></select></td>
               <td className="r" style={{ whiteSpace: "nowrap" }}>
                 <button type="button" className="btn sm" onClick={() => setModal({ kind: "client", edit: c })}>Edit</button>{" "}
-                {c.isActive === false
-                  ? <button type="button" className="btn sm" onClick={() => save(c, { isActive: true })}>Reactivate</button>
-                  : <button type="button" className="btn sm" onClick={() => remove(c)}>Remove</button>}
+                <button type="button" className="btn sm" onClick={() => remove(c)}>Remove</button>
               </td>
             </tr>
           ))}
-          {!D.clients.length && <tr><td colSpan={8} className="empty">No clients yet. Click “+ Add client” and pick the lead from the CRM.</td></tr>}
+          {!D.clients.length && <tr><td colSpan={10} className="empty">No clients yet. Click “+ Add client” and pick the lead from the CRM.</td></tr>}
         </tbody></table></div>
       </div>
 

@@ -10,6 +10,12 @@ import "@fontsource/plus-jakarta-sans/700.css";
 import "@fontsource/plus-jakarta-sans/800.css";
 import "./index.css";
 
+// The mouse wheel over a number box scrolls the page; it never changes the number
+document.addEventListener("wheel", (e) => {
+  const t = e.target;
+  if (t instanceof HTMLInputElement && t.type === "number" && document.activeElement === t) t.blur();
+}, { passive: true });
+
 installFetchInterceptor();
 
 ReactDOM.createRoot(document.getElementById("root")).render(

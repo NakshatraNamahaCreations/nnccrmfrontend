@@ -157,3 +157,32 @@
 .ep .ep-emps .ep-contact { max-width: 230px; }
 .ep .ep-emps .ep-contact > span:first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ep .ep-emps th { white-space: nowrap; }
+
+/* One employee's page (Work log → View) */
+.ep .pp-top { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.ep .pp-top .sp { flex: 1; }
+.ep .pp-who { display: flex; align-items: center; gap: 10px; }
+.ep .pp-who b { font-size: 18px; color: #0F172A; display: block; }
+.ep .pp-who .sub { display: block; }
+.ep .pp-kpis { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+.ep .pp-proj tbody tr { cursor: pointer; }
+.ep .pp-proj tbody tr:hover td { background: #F5F8FF; }
+.ep .pp-proj tbody tr.on td { background: #EEF4FF; }
+.ep .pp-proj th.n, .ep .pp-proj td.n, .ep .pp-att th.n, .ep .pp-att td.n { text-align: right; white-space: nowrap; }
+.ep .pp-types { display: flex; flex-wrap: wrap; gap: 6px; }
+.ep .pp-types span { background: #F1F5F9; border-radius: 999px; padding: 2px 9px; font-size: 12px; color: #334155; white-space: nowrap; }
+.ep .pp-types b { color: #0F172A; }
+.ep .pp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start; }
+.ep .pp-grid > .card { margin-bottom: 16px; }
+.ep .pp-list { max-height: 420px; overflow-y: auto; }
+.ep .pp-li { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px 16px; border-top: 1px solid #F1F5F9; }
+.ep .pp-li .x { display: grid; gap: 2px; min-width: 0; }
+.ep .pp-li .x b { font-weight: 500; color: #0F172A; overflow-wrap: anywhere; }
+.ep .pp-li .pill { white-space: nowrap; }
+.ep .pp-seg { display: inline-flex; border: 1px solid #E2E8F0; border-radius: 9px; overflow: hidden; margin-left: auto; }
+.ep .pp-seg button { border: 0; background: #fff; padding: 5px 10px; font: inherit; font-size: 12.5px; cursor: pointer; color: #475569; }
+.ep .pp-seg button.on { background: #0F172A; color: #fff; }
+.ep .pp-f { display: inline-flex; gap: 8px; margin-left: auto; }
+.ep .pp-f select { height: 32px; border: 1px solid #E2E8F0; border-radius: 8px; padding: 0 8px; font: inherit; font-size: 13px; max-width: 220px; }
+.ep .pp-att td { vertical-align: middle; }
+@media (max-width: 1100px) { .ep .pp-grid { grid-template-columns: 1fr; } }
