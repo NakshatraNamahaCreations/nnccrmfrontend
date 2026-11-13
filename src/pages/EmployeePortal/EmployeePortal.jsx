@@ -585,167 +585,126 @@ function Work({ accounts, today }) {
   );
 }
 
-// One employee's page: totals, work per project, bugs, tasks, attendance and every item day by day
+// One employee's page: a short summary, then their projects. Click a project to see,
+// for that project only, the work they did date by date, its bugs and its tasks.
 const BUG_ST = { open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progress: ["In progress", "p-amb"], info: ["Needs info", "p-amb"], fixed: ["Fixed, to verify", "p-blue"], verified: ["Verified", "p-ok"], notbug: ["Not a bug", "p-grey"] };
 const bugDone = (s) => ["fixed", "verified", "notbug"].includes(s);
 const TASK_ST = { todo: ["To do", "p-amb"], doing: ["Doing", "p-blue"], done: ["Done", "p-ok"] };
+const NOP = "Other work (no project)";
 function PersonWork({ a, work, days, attendance, period, onClose }) {
   const O = useGet(a ? `/accounts/${a.id}/overview` : "");
-  const [proj, setProj] = useState(""), [ty, setTy] = useState(""), [bugTab, setBugTab] = useState("for");
+  const [open, setOpen] = useState(""), [view, setView] = useState("work"), [showAtt, setShowAtt] = useState(false);
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   if (!a) return null;
   const o = O.data || { bugsFor: [], bugsBy: [], tasks: [] };
-  const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0), extra = work.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0);
+  const bugsAll = [...o.bugsFor, ...o.bugsBy];
+  const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0);
   const attDays = attendance.filter(x => x.sessions?.length);
-  const firstIn = attDays.map(x => new Date(x.sessions[0].in)).map(d => d.getHours() * 60 + d.getMinutes());
-  const avgIn = firstIn.length ? Math.round(firstIn.reduce((s, m) => s + m, 0) / firstIn.length) : null;
-  const mm = (m) => `${(Math.floor(m / 60) % 12) || 12}:${String(m % 60).padStart(2, "0")} ${m < 720 ? "am" : "pm"}`;
-  // work per project / client
-  const P = {};
-  work.forEach(w => {
-    const k = w.refName || "No project";
-    const p = P[k] || (P[k] = { name: k, n: 0, hrs: 0, types: {}, last: "" });
-    p.n++; p.hrs += w.hrs || 0; p.types[w.type] = (p.types[w.type] || 0) + 1; if (w.date > p.last) p.last = w.date;
-  });
-  const projects = Object.values(P).sort((x, y) => y.hrs - x.hrs);
-  const bugsByProj = (name) => o.bugsFor.filter(b => (b.project || "No project") === name);
-  const types = [...new Set(work.map(w => w.type))];
-  const shown = work.filter(w => (!proj || (w.refName || "No project") === proj) && (!ty || w.type === ty));
-  const dates = [...new Set([...shown.map(w => w.date), ...(proj || ty ? [] : [...days.map(x => x.date), ...attDays.map(x => x.date)])])].sort().reverse();
-  const openFor = o.bugsFor.filter(b => !bugDone(b.status)), fixedFor = o.bugsFor.filter(b => bugDone(b.status));
-  const bugs = bugTab === "for" ? o.bugsFor : o.bugsBy;
-  const openTasks = o.tasks.filter(t => t.status !== "done");
+  // every project they touched: work in this period, bugs or tasks
+  const names = [...new Set([...work.map(w => w.refName || NOP), ...bugsAll.map(b => b.project || NOP), ...o.tasks.map(t => t.project || NOP)])];
+  const projects = names.map(name => {
+    const W = work.filter(w => (w.refName || NOP) === name), B = bugsAll.filter(b => (b.project || NOP) === name), K = o.tasks.filter(t => (t.project || NOP) === name);
+    return { name, W, B, K, hrs: W.reduce((s, w) => s + (w.hrs || 0), 0), last: W.map(w => w.date).sort().pop() || "",
+      bOpen: B.filter(b => !bugDone(b.status)).length, bDone: B.filter(b => bugDone(b.status)).length, kOpen: K.filter(t => t.status !== "done").length };
+  }).sort((x, y) => (y.hrs - x.hrs) || (y.bOpen - x.bOpen) || x.name.localeCompare(y.name));
+  const openBugs = bugsAll.filter(b => !bugDone(b.status)).length, openTasks = o.tasks.filter(t => t.status !== "done").length;
+  const pick = (name) => { setOpen(open === name ? "" : name); setView("work"); };
   const exportMe = () => {
-    const rows = [[a.name, roleNames(a), period], [], ["Project", "Items", "Hours", "Bugs open", "Bugs fixed", "Last worked"]];
-    projects.forEach(p => { const B = bugsByProj(p.name); rows.push([p.name, p.n, h1(p.hrs), B.filter(b => !bugDone(b.status)).length, B.filter(b => bugDone(b.status)).length, p.last]); });
-    rows.push([], ["Date", "Work type", "Title", "Project / client", "Details", "Hours", "Extra", "Link"]);
-    [...work].sort((x, y) => (x.date < y.date ? -1 : 1)).forEach(e => rows.push([e.date, TY[e.type] || e.type, e.title, e.refName || "", metaTxt(e), h1(e.hrs), e.meta?.extra ? "Yes" : "", e.url || ""]));
-    if (o.bugsFor.length) { rows.push([], ["Bugs given to them", "Raised on", "Project", "Severity", "Status", "Raised by"]); o.bugsFor.forEach(b => rows.push([`${b.code} ${b.title}`, b.date, b.project, b.sev, BUG_ST[b.status]?.[0] || b.status, b.by])); }
-    rows.push([], ["Date", "Check in", "Check out", "Day submitted"]);
-    [...attDays].sort((x, y) => (x.date < y.date ? -1 : 1)).forEach(x => { const last = [...x.sessions].reverse().find(s => s.out); const d = days.find(y => y.date === x.date); rows.push([x.date, tm(x.sessions[0].in), last ? tm(last.out) : "", d ? ampm(d.at) : ""]); });
+    const rows = [[a.name, roleNames(a), period], [], ["Project", "Items", "Hours", "Bugs open", "Bugs fixed", "Tasks open", "Last worked"]];
+    projects.forEach(p => rows.push([p.name, p.W.length, h1(p.hrs), p.bOpen, p.bDone, p.kOpen, p.last]));
+    rows.push([], ["Date", "Project", "Work type", "What was done", "Details", "Hours", "Link"]);
+    [...work].sort((x, y) => (x.date < y.date ? -1 : 1)).forEach(e => rows.push([e.date, e.refName || "", TY[e.type] || e.type, e.title, metaTxt(e), h1(e.hrs), e.url || ""]));
+    if (bugsAll.length) { rows.push([], ["Bug", "Project", "Raised on", "Severity", "Status", "Raised by", "Given to"]); bugsAll.forEach(b => rows.push([`${b.code} ${b.title}`, b.project, b.date, b.sev, BUG_ST[b.status]?.[0] || b.status, b.by, b.to])); }
+    if (o.tasks.length) { rows.push([], ["Task", "Project", "Due", "Status"]); o.tasks.forEach(t => rows.push([t.title, t.project, t.due, TASK_ST[t.status]?.[0] || t.status])); }
     downloadCsv(`${a.name.replace(/[^a-z0-9]+/gi, "-")}_${period.replace(/[^a-z0-9]+/gi, "-")}.csv`, rows);
   };
 
   return (
     <div className="pp">
       <div className="pp-top">
-        <button type="button" className="btn" onClick={onClose}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Back to work log</button>
+        <button type="button" className="btn" onClick={onClose}><ChevronRight size={14} style={{ transform: "rotate(180deg)" }} /> Back</button>
         <div className="pp-who"><Av name={a.name} role={a.role} /><span><b>{a.name}</b><span className="sub">{roleNames(a)} · {period}</span></span></div>
         <span className="sp" />
         <button type="button" className="btn" onClick={exportMe}>Export</button>
       </div>
 
-      <div className="kpis pp-kpis">
-        <div className="kpi"><span className="l">Hours logged</span><span className="v">{h1(hrs)} h</span><span className="s">{extra ? `${h1(extra)} h extra` : "no extra hours"}</span></div>
-        <div className="kpi"><span className="l">Items logged</span><span className="v">{work.length}</span><span className="s">{types.length} kinds of work</span></div>
-        <div className="kpi"><span className="l">Projects worked on</span><span className="v">{projects.filter(p => p.name !== "No project").length}</span></div>
-        <div className="kpi"><span className="l">Days checked in</span><span className="v">{attDays.length}</span><span className="s">{avgIn != null ? `usually in by ${mm(avgIn)}` : "no check ins"}</span></div>
-        <div className="kpi"><span className="l">Days submitted</span><span className="v">{days.length}</span></div>
-        {(o.bugsFor.length > 0 || o.bugsBy.length === 0) && <div className="kpi"><span className="l">Bugs given to them</span><span className={`v ${openFor.length ? "red" : ""}`}>{openFor.length} open</span><span className="s">{fixedFor.length} fixed of {o.bugsFor.length}</span></div>}
-        {o.bugsBy.length > 0 && <div className="kpi"><span className="l">Bugs they raised</span><span className="v">{o.bugsBy.length}</span><span className="s">{o.bugsBy.filter(b => !bugDone(b.status)).length} still open</span></div>}
-        <div className="kpi"><span className="l">Tasks</span><span className={`v ${openTasks.some(t => t.due < T(0)) ? "red" : ""}`}>{openTasks.length} open</span><span className="s">{o.tasks.length - openTasks.length} done</span></div>
+      <div className="pp-sum">
+        <span><small>Hours</small><b>{h1(hrs)} h</b></span>
+        <span><small>Items</small><b>{work.length}</b></span>
+        <span><small>Projects</small><b>{projects.filter(p => p.name !== NOP).length}</b></span>
+        <span><small>Days checked in</small><b>{attDays.length}</b></span>
+        <span><small>Days submitted</small><b>{days.length}</b></span>
+        <span><small>Bugs open</small><b className={openBugs ? "red" : ""}>{O.loading ? "…" : openBugs}</b></span>
+        <span><small>Tasks open</small><b>{O.loading ? "…" : openTasks}</b></span>
       </div>
 
-      <div className="card"><h3>Project wise <small>{period.toLowerCase()} · click a project to see only its work</small></h3>
-        {projects.length ? (
-          <div className="tw"><table className="pp-proj">
-            <thead><tr><th>Project or client</th><th className="n">Items</th><th className="n">Hours</th><th>Work done</th><th className="n">Bugs open</th><th className="n">Bugs fixed</th><th>Last worked</th></tr></thead>
-            <tbody>{projects.map(p => {
-              const B = bugsByProj(p.name), on = proj === p.name;
+      <div className="card"><h3>Projects <small>click a project to see its work, bugs and tasks</small></h3>
+        {!projects.length ? <div className="empty">{O.loading ? "Loading…" : "Nothing in this period."}</div> : (
+          <div className="pl">
+            <div className="pl-h"><span>Project</span><span className="n">Items</span><span className="n">Hours</span><span className="n">Bugs open</span><span className="n">Bugs fixed</span><span className="n">Tasks open</span><span>Last worked</span><span /></div>
+            {projects.map(p => {
+              const on = open === p.name;
               return (
-                <tr key={p.name} className={on ? "on" : ""} onClick={() => setProj(on ? "" : p.name)}>
-                  <td><b>{p.name}</b></td><td className="n">{p.n}</td><td className="n"><b>{h1(p.hrs)} h</b></td>
-                  <td><span className="pp-types">{Object.entries(p.types).sort((x, y) => y[1] - x[1]).map(([k, n]) => <span key={k}>{TY[k] || k} <b>{n}</b></span>)}</span></td>
-                  <td className="n">{B.filter(b => !bugDone(b.status)).length || "-"}</td><td className="n">{B.filter(b => bugDone(b.status)).length || "-"}</td>
-                  <td>{fd(p.last)}</td>
-                </tr>
-              );
-            })}</tbody>
-          </table></div>
-        ) : <div className="empty">Nothing logged in this period.</div>}
-      </div>
-
-      <div className="pp-grid">
-        <div className="card"><h3>Bugs <small>all dates</small>
-          <span className="pp-seg">
-            <button type="button" className={bugTab === "for" ? "on" : ""} onClick={() => setBugTab("for")}>Given to them ({o.bugsFor.length})</button>
-            <button type="button" className={bugTab === "by" ? "on" : ""} onClick={() => setBugTab("by")}>Raised by them ({o.bugsBy.length})</button>
-          </span></h3>
-          {O.loading ? <div className="empty">Loading…</div> : bugs.length ? (
-            <div className="pp-list">{bugs.slice(0, 200).map(b => (
-              <div key={b.id} className="pp-li">
-                <span className="x"><b>{b.code ? `${b.code} · ` : ""}{b.title}</b>
-                  <span className="sub">{[b.project, b.mod, b.sev, bugTab === "for" ? b.by && `raised by ${b.by}` : b.to && `to ${b.to}`, `raised ${fd(b.date)}`].filter(Boolean).join(" · ")}</span></span>
-                <span className={`pill ${BUG_ST[b.status]?.[1] || "p-grey"}`}>{BUG_ST[b.status]?.[0] || b.status}</span>
-              </div>
-            ))}</div>
-          ) : <div className="empty">{bugTab === "for" ? "No bugs have been given to them." : "They have not raised any bugs."}</div>}
-        </div>
-        <div className="card"><h3>Tasks <small>given by the admin</small></h3>
-          {O.loading ? <div className="empty">Loading…</div> : o.tasks.length ? (
-            <div className="pp-list">{o.tasks.slice(0, 100).map(t => (
-              <div key={t.id} className="pp-li">
-                <span className="x"><b>{t.title}</b><span className="sub">{[t.project, `due ${fd(t.due)}`, t.from && t.from !== "me" ? `from ${t.from}` : "", t.doneOn ? `done ${fd(t.doneOn)}` : ""].filter(Boolean).join(" · ")}</span></span>
-                <span className={`pill ${t.status !== "done" && t.due < T(0) ? "p-red" : TASK_ST[t.status]?.[1]}`}>{t.status !== "done" && t.due < T(0) ? "Overdue" : TASK_ST[t.status]?.[0]}</span>
-              </div>
-            ))}</div>
-          ) : <div className="empty">No tasks given.</div>}
-        </div>
-      </div>
-
-      <div className="card"><h3>Attendance <small>{period.toLowerCase()}</small></h3>
-        {attDays.length || days.length ? (
-          <div className="tw"><table className="pp-att">
-            <thead><tr><th>Date</th><th>Check in</th><th>Check out</th><th className="n">Time in office</th><th className="n">Hours logged</th><th>Day submitted</th><th>Note</th></tr></thead>
-            <tbody>{[...new Set([...attDays.map(x => x.date), ...days.map(x => x.date)])].sort().reverse().map(dt => {
-              const x = attendance.find(y => y.date === dt), S = x?.sessions || [], last = [...S].reverse().find(s => s.out), d = days.find(y => y.date === dt);
-              const open = S.find(s => !s.out), isToday = dt === T(0);
-              // a past day still open was never checked out: count only the closed sessions
-              const mins = S.reduce((m, s) => m + (s.out ? new Date(s.out) - new Date(s.in) : isToday ? new Date() - new Date(s.in) : 0) / 60000, 0);
-              return (
-                <tr key={dt}>
-                  <td>{fdw(dt)}</td><td>{S[0] ? <b>{tm(S[0].in)}</b> : <span className="sub">-</span>}</td>
-                  <td>{open ? (isToday ? <span className="pill p-ok">Still in</span> : <span className="pill p-red">No check out</span>) : last ? tm(last.out) : <span className="sub">-</span>}</td>
-                  <td className="n">{S.length && mins > 0 ? `${Math.floor(mins / 60)}h ${String(Math.round(mins % 60)).padStart(2, "0")}m` : "-"}</td>
-                  <td className="n">{h1(work.filter(w => w.date === dt).reduce((s2, w) => s2 + (w.hrs || 0), 0))} h</td>
-                  <td>{d ? <span className="pill p-ok">Sent {ampm(d.at)}</span> : <span className="pill p-amb">Not submitted</span>}</td>
-                  <td className="sub">{d ? [d.note, d.plan && `Tomorrow: ${d.plan}`].filter(Boolean).join(" · ") : ""}</td>
-                </tr>
-              );
-            })}</tbody>
-          </table></div>
-        ) : <div className="empty">No check ins in this period.</div>}
-      </div>
-
-      <div className="card"><h3>Work, day by day <small>{shown.length} items · {h1(shown.reduce((s, w) => s + (w.hrs || 0), 0))} h</small>
-          <span className="pp-f">
-            <select value={proj} onChange={e => setProj(e.target.value)} aria-label="Project"><option value="">All projects</option>{projects.map(p => <option key={p.name}>{p.name}</option>)}</select>
-            <select value={ty} onChange={e => setTy(e.target.value)} aria-label="Work type"><option value="">All work types</option>{types.map(k => <option key={k} value={k}>{TY[k] || k}</option>)}</select>
-          </span></h3>
-        {dates.some(dt => shown.some(w => w.date === dt)) ? (
-          <div className="tw"><table className="pp-work">
-            <thead><tr><th>Date</th><th>Work type</th><th>What was done</th><th>Project or client</th><th>Details</th><th>Link or files</th><th className="n">Hours</th></tr></thead>
-            {dates.filter(dt => shown.some(w => w.date === dt)).map(dt => {
-              const L = shown.filter(w => w.date === dt);
-              return (
-                <tbody key={dt}>
-                  <tr className="pp-dayrow"><td colSpan={6}><b>{fdw(dt)}</b> <span className="sub">{L.length} item{L.length > 1 ? "s" : ""}</span></td><td className="n"><b>{h1(L.reduce((s, w) => s + (w.hrs || 0), 0))} h</b></td></tr>
-                  {L.map(e => (
-                    <tr key={e._id}>
-                      <td className="sub">{fd(dt)}</td>
-                      <td><span className="pill p-other">{TY[e.type] || e.type}</span>{e.meta?.extra && <span className="pill p-amb" style={{ marginLeft: 4 }}>Extra</span>}</td>
-                      <td className="pp-what">{e.title}</td>
-                      <td>{e.refName || "-"}</td>
-                      <td className="sub">{metaTxt(e) || "-"}</td>
-                      <td className="pp-links">{e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer" title={e.url}>Open link</a>}<WorkFiles e={e} />{!e.url && !e.meta?.files?.length && "-"}</td>
-                      <td className="n">{h1(e.hrs)} h</td>
-                    </tr>
-                  ))}
-                </tbody>
+                <div key={p.name} className={`pl-item ${on ? "on" : ""}`}>
+                  <button type="button" className="pl-row" onClick={() => pick(p.name)} aria-expanded={on}>
+                    <span className="pl-name">{p.name}</span><span className="n">{p.W.length}</span><span className="n"><b>{h1(p.hrs)} h</b></span>
+                    <span className={`n ${p.bOpen ? "red" : ""}`}>{p.bOpen || "-"}</span><span className="n">{p.bDone || "-"}</span><span className="n">{p.kOpen || "-"}</span>
+                    <span>{p.last ? fd(p.last) : "-"}</span><ChevronRight size={16} className="pl-chev" />
+                  </button>
+                  {on && (
+                    <div className="pl-body">
+                      <div className="pl-tabs">
+                        {[["work", `Work by date (${p.W.length})`], ["bugs", `Bugs (${p.B.length})`], ["tasks", `Tasks (${p.K.length})`]].map(([k, l]) => (
+                          <button key={k} type="button" className={view === k ? "on" : ""} onClick={() => setView(k)}>{l}</button>
+                        ))}
+                      </div>
+                      {view === "work" && (p.W.length ? (
+                        <table className="pl-t"><thead><tr><th>Date</th><th>Work type</th><th>What was done</th><th>Link</th><th className="n">Hours</th></tr></thead>
+                          <tbody>{[...p.W].sort((x, y) => (x.date < y.date ? 1 : -1)).map(e => (
+                            <tr key={e._id}><td className="nw">{fdw(e.date)}</td><td><span className="pill p-other">{TY[e.type] || e.type}</span></td>
+                              <td>{e.title}{metaTxt(e) && <span className="sub">{metaTxt(e)}</span>}</td>
+                              <td className="nw">{e.url ? <a className="url" href={e.url} target="_blank" rel="noopener noreferrer" title={e.url}>Open</a> : null}<WorkFiles e={e} />{!e.url && !e.meta?.files?.length && "-"}</td>
+                              <td className="n">{h1(e.hrs)} h</td></tr>
+                          ))}</tbody></table>
+                      ) : <div className="empty">No work logged on this project in this period.</div>)}
+                      {view === "bugs" && (p.B.length ? (
+                        <table className="pl-t"><thead><tr><th>Bug</th><th>Raised on</th><th>Severity</th><th>Raised by</th><th>Status</th></tr></thead>
+                          <tbody>{p.B.map(x => (
+                            <tr key={x.id}><td><b>{x.code}</b> {x.title}{x.mod && <span className="sub">{x.mod}</span>}</td><td className="nw">{fd(x.date)}</td><td>{x.sev || "-"}</td><td>{x.by || a.name}</td>
+                              <td><span className={`pill ${BUG_ST[x.status]?.[1] || "p-grey"}`}>{BUG_ST[x.status]?.[0] || x.status}</span></td></tr>
+                          ))}</tbody></table>
+                      ) : <div className="empty">No bugs on this project.</div>)}
+                      {view === "tasks" && (p.K.length ? (
+                        <table className="pl-t"><thead><tr><th>Task</th><th>Due</th><th>Given by</th><th>Status</th></tr></thead>
+                          <tbody>{p.K.map(t => {
+                            const late = t.status !== "done" && t.due < T(0);
+                            return <tr key={t.id}><td>{t.title}</td><td className="nw">{fd(t.due)}</td><td>{t.from && t.from !== "me" ? t.from : "Self"}</td>
+                              <td><span className={`pill ${late ? "p-red" : TASK_ST[t.status]?.[1]}`}>{late ? "Overdue" : TASK_ST[t.status]?.[0]}</span></td></tr>;
+                          })}</tbody></table>
+                      ) : <div className="empty">No tasks on this project.</div>)}
+                    </div>
+                  )}
+                </div>
               );
             })}
-          </table></div>
-        ) : <div className="empty">Nothing logged{proj || ty ? " for this filter" : " in this period"}.</div>}
+          </div>
+        )}
+      </div>
+
+      <div className="card"><h3>Attendance <small>{attDays.length} days checked in · {period.toLowerCase()}</small>
+        <button type="button" className="btn sm" style={{ marginLeft: "auto" }} onClick={() => setShowAtt(v => !v)}>{showAtt ? "Hide" : "Show"}</button></h3>
+        {showAtt && (attDays.length || days.length ? (
+          <table className="pl-t"><thead><tr><th>Date</th><th>Check in</th><th>Check out</th><th className="n">Hours logged</th><th>Day submitted</th></tr></thead>
+            <tbody>{[...new Set([...attDays.map(x => x.date), ...days.map(x => x.date)])].sort().reverse().map(dt => {
+              const S = attendance.find(y => y.date === dt)?.sessions || [], last = [...S].reverse().find(x => x.out), op = S.find(x => !x.out), d = days.find(y => y.date === dt);
+              return (
+                <tr key={dt}><td className="nw">{fdw(dt)}</td><td>{S[0] ? tm(S[0].in) : "-"}</td>
+                  <td>{op ? (dt === T(0) ? <span className="pill p-ok">Still in</span> : <span className="pill p-red">No check out</span>) : last ? tm(last.out) : "-"}</td>
+                  <td className="n">{h1(work.filter(w => w.date === dt).reduce((s2, w) => s2 + (w.hrs || 0), 0))} h</td>
+                  <td>{d ? <span className="pill p-ok">Sent {ampm(d.at)}</span> : <span className="pill p-amb">Not submitted</span>}</td></tr>
+              );
+            })}</tbody></table>
+        ) : <div className="empty">No check ins in this period.</div>)}
       </div>
     </div>
   );
