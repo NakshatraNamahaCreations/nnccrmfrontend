@@ -605,6 +605,7 @@ const TASK_ST = { todo: ["To do", "p-amb"], doing: ["Doing", "p-blue"], done: ["
 const NOP = "Other work (no project)";
 function PersonWork({ a, work, loading, period, onClose, range }) {
   const O = useGet(a ? `/accounts/${a.id}/overview` : "");
+  const PJ = useGet(a ? `/accounts/${a.id}/projects` : "");   // the projects or clients they are on
   const [open, setOpen] = useState(""), [view, setView] = useState("work");
   useEffect(() => { window.scrollTo({ top: 0 }); }, []);
   if (!a) return null;
@@ -612,10 +613,12 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
   const bugsAll = [...o.bugsFor, ...o.bugsBy];
   const hrs = work.reduce((s, w) => s + (w.hrs || 0), 0);
   // every project they touched: work in this period, bugs or tasks
-  const names = [...new Set([...work.map(w => w.refName || NOP), ...bugsAll.map(b => b.project || NOP), ...o.tasks.map(t => t.project || NOP)])];
+  const onList = PJ.data?.mine || [];
+  const names = [...new Set([...onList.map(p => p.name), ...work.map(w => w.refName || NOP), ...bugsAll.map(b => b.project || NOP), ...o.tasks.map(t => t.project || NOP)])];
   const projects = names.map(name => {
     const W = work.filter(w => (w.refName || NOP) === name), B = bugsAll.filter(b => (b.project || NOP) === name), K = o.tasks.filter(t => (t.project || NOP) === name);
-    return { name, W, B, K, hrs: W.reduce((s, w) => s + (w.hrs || 0), 0), last: W.map(w => w.date).sort().pop() || "",
+    const on = onList.find(x => x.name === name);
+    return { name, W, B, K, assigned: !!on, stage: on?.stage || "", hrs: W.reduce((s, w) => s + (w.hrs || 0), 0), last: W.map(w => w.date).sort().pop() || "",
       bOpen: B.filter(b => !bugDone(b.status)).length, bDone: B.filter(b => bugDone(b.status)).length, kOpen: K.filter(t => t.status !== "done").length };
   }).sort((x, y) => (y.hrs - x.hrs) || (y.bOpen - x.bOpen) || x.name.localeCompare(y.name));
   const openBugs = bugsAll.filter(b => !bugDone(b.status)).length, openTasks = o.tasks.filter(t => t.status !== "done").length;
@@ -650,7 +653,7 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
         <div><small>Tasks open</small><b>{O.loading ? "…" : openTasks}</b></div>
       </div>
 
-      <div className="card"><h3>Projects <small>click a project to see its work, bugs and tasks</small></h3>
+      <div className="card"><h3>Projects <small>{onList.length} assigned · click a project to see its work, bugs and tasks</small></h3>
         {!projects.length ? <div className="empty">{O.loading ? "Loading…" : "Nothing in this period."}</div> : (
           <div className="pl">
             <div className="pl-h"><span>Project</span><span className="n">Items</span><span className="n">Hours</span><span className="n">Bugs open</span><span className="n">Bugs fixed</span><span className="n">Tasks open</span><span>Last worked</span><span /></div>
@@ -659,7 +662,7 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
               return (
                 <div key={p.name} className={`pl-item ${on ? "on" : ""}`}>
                   <button type="button" className="pl-row" onClick={() => pick(p.name)} aria-expanded={on}>
-                    <span className="pl-name">{p.name}</span><span className="n">{p.W.length}</span><span className="n"><b>{h1(p.hrs)} h</b></span>
+                    <span className="pl-name">{p.name}<small>{[p.assigned ? "Assigned" : "", p.stage].filter(Boolean).join(" · ")}</small></span><span className="n">{p.W.length}</span><span className="n"><b>{h1(p.hrs)} h</b></span>
                     <span className={`n ${p.bOpen ? "red" : ""}`}>{p.bOpen || "-"}</span><span className="n">{p.bDone || "-"}</span><span className="n">{p.kOpen || "-"}</span>
                     <span>{p.last ? fd(p.last) : "-"}</span><ChevronRight size={16} className="pl-chev" />
                   </button>

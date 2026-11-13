@@ -236,3 +236,5 @@
 .ep .pp-tiles b.red { color: #DC2626; }
 .ep .pp-tiles b.ok { color: #059669; }
 @media (max-width: 1000px) { .ep .pp-tiles { grid-template-columns: repeat(3, 1fr); } .ep .pp-tiles > div:nth-child(4) { border-left: 0; } .ep .pp-tiles > div:nth-child(n+4) { border-top: 1px solid #EEF2F7; } }
+
+.ep .pl-name small { display: block; font-weight: 400; font-size: 12px; color: #64748B; margin-top: 2px; }

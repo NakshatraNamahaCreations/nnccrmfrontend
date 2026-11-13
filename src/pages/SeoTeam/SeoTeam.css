@@ -187,3 +187,14 @@
 .cl-num { font-variant-numeric: tabular-nums; font-weight: 600; color: #0F172A; }
 .cl-team { display: flex; flex-wrap: wrap; gap: 6px; }
 .cl-team > span:not(.sub) { background: #EEF4FF; color: #1D4ED8; border-radius: 999px; padding: 3px 10px; font-size: 12.5px; white-space: nowrap; }
+
+/* Work log table: one tidy line per entry */
+.wl-t td { vertical-align: middle; padding-top: 10px; padding-bottom: 10px; }
+.wl-t .wl-d { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.wl-t .wl-c { max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.wl-t .wl-x { min-width: 240px; max-width: 420px; }
+.wl-t .wl-clamp { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.4; }
+.wl-t .wl-k { max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #475569; font-size: 13px; }
+.wl-t .wl-l { white-space: nowrap; }
+.wl-t .wl-open { display: inline-flex; align-items: center; padding: 4px 10px; border: 1px solid #BFD3FE; border-radius: 8px; background: #EEF4FF; color: #1D4ED8; font-size: 12.5px; font-weight: 600; text-decoration: none; }
+.wl-t .wl-open:hover { background: #DBE7FF; }

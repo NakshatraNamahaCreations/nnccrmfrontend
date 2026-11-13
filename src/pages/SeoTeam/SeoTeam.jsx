@@ -158,14 +158,15 @@ function WorkTable({ L, client, av, canDelete, onChanged }) {
     try { await seoApi(`/work/${w.id}`, { method: "DELETE" }); onChanged?.(); } catch (err) { toast.error(err.message); }
   };
   return (
-    <div className="tw"><table><thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Details</th><th>Link</th><th>By</th><th>Status</th>{canDelete && <th />}</tr></thead><tbody>
+    <div className="tw"><table className="wl-t"><thead><tr><th>Date</th><th>Client</th><th>Type</th><th>Details</th><th>Keyword</th><th>Link</th><th>By</th><th>Status</th>{canDelete && <th />}</tr></thead><tbody>
       {L.map(w => (
         <tr key={w.id}>
-          <td className="num">{fds(w.date)}</td>
-          <td>{client(w.cid)?.name || "-"}</td>
+          <td className="wl-d">{fds(w.date)}</td>
+          <td className="wl-c" title={client(w.cid)?.name || ""}>{client(w.cid)?.name || "-"}</td>
           <td><span className={`pill p-${w.type}`}>{TYPES[w.type]}</span></td>
-          <td>{w.title}{w.kw ? <span className="sub">Keyword: {w.kw}{w.da ? ` · DA ${w.da}` : ""}</span> : w.platform ? <span className="sub">{w.platform}</span> : null}</td>
-          <td>{w.url ? <a className="url" href={w.url} target="_blank" rel="noopener noreferrer">{w.url.replace(/^https?:\/\//, "")}</a> : <span className="sub">-</span>}</td>
+          <td className="wl-x"><span className="wl-clamp" title={w.title}>{w.title || "-"}</span>{!w.kw && w.platform ? <span className="sub">{w.platform}</span> : null}</td>
+          <td className="wl-k">{w.kw ? <span title={w.kw}>{w.kw}{w.da ? ` · DA ${w.da}` : ""}</span> : <span className="sub">-</span>}</td>
+          <td className="wl-l">{w.url ? <a className="wl-open" href={w.url} target="_blank" rel="noopener noreferrer" title={w.url}>Open link</a> : <span className="sub">-</span>}</td>
           <td>{av(w.who)}</td>
           <td><button type="button" className={`pill ${w.status === "live" ? "p-ok" : "p-amb"}`} onClick={() => toggle(w)} title="Click to change">{w.status === "live" ? "Live" : "Pending"}</button></td>
           {canDelete && <td className="r"><button type="button" className="btn sm" onClick={() => del(w)} aria-label="Delete">✕</button></td>}
