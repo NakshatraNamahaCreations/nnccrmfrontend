@@ -544,11 +544,15 @@ function HistoryView({ D, active, mineC, av, sel, setSel, setTab }) {
 /* ───────── PDF REPORTS ───────── */
 function ReportsView({ D, active, mineC, client, person, av, sel, setSel, who }) {
   const [mode, setMode] = useState("client");
-  const rp = sel.rp || "month";
+  const rp0 = sel.rp || "month", rp = mode === "team" && rp0 === "all" ? "month" : rp0;
   const C = active.filter(mineC);
   const rc = C.some(c => c.id === sel.rc) ? sel.rc : C[0]?.id;
   const c = client(rc);
-  const P = rp === "all" && c ? [c.start, T(0)] : period(rp === "all" ? "month" : rp);
+  const first = c ? [c.start, ...D.work.filter(w => w.cid === c.id).map(w => w.date), ...D.ads.filter(r => r.cid === c.id).map(r => r.date)].filter(Boolean).sort()[0] || T(0) : T(0);
+  const P = rp === "all" && c ? [first < T(0) ? first : T(0), T(0)] : period(rp === "all" ? "month" : rp);
+  const fileName = mode === "client" && c
+    ? `${c.name} - ${rp === "all" ? "Full report" : rp.includes("month") ? "Monthly report" : "Weekly report"} - ${fd(P[0])} to ${fd(P[1])}`
+    : `Team summary - ${fd(P[0])} to ${fd(P[1])}`;
   const shareWa = () => {
     const txt = repText(c, P, rp, D);
     window.open(`https://wa.me/${waPhone(c.phone)}?text=${encodeURIComponent(txt)}`, "_blank", "noopener");
@@ -566,15 +570,58 @@ function ReportsView({ D, active, mineC, client, person, av, sel, setSel, who })
           {mode === "client" && <option value="all">Full report since day 1</option>}
         </select>
         <span style={{ flex: 1 }} />
-        <button type="button" className="btn" onClick={() => window.print()}>Download PDF</button>
+        <button type="button" className="btn" onClick={() => printReport(fileName)}>Download PDF</button>
         {mode === "client" && c && <button type="button" className="btn wa" onClick={shareWa}>Share summary on WhatsApp</button>}
       </div>
       {mode === "client"
         ? (c ? <ClientReport D={D} c={c} P={P} rp={rp} person={person} /> : <div className="empty">No client.</div>)
-        : <TeamReport D={D} P={rp === "all" ? period("month") : P} rp={rp} who={who} client={client} av={av} mineC={mineC} />}
+        : <TeamReport D={D} P={P} rp={rp} who={who} client={client} av={av} mineC={mineC} />}
     </>
   );
 }
+
+// Print only the report, in its own frame, so it is never cut off by the page layout
+function printReport(name) {
+  const rep = document.getElementById("seo-rep");
+  if (!rep) return;
+  const fr = document.createElement("iframe");
+  fr.setAttribute("aria-hidden", "true");
+  fr.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden";
+  document.body.appendChild(fr);
+  const styles = [...document.querySelectorAll('style, link[rel="stylesheet"]')]
+    .map(n => (n.tagName === "LINK" ? `<link rel="stylesheet" href="${n.href}">` : n.outerHTML)).join("");
+  const doc = fr.contentDocument;
+  doc.open();
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${name.replace(/</g, "")}</title>${styles}
+<style>
+@page { size: A4; margin: 12mm; }
+html, body { background: #fff !important; margin: 0; height: auto !important; overflow: visible !important; }
+.seo-layout, .seo, .seo-app { display: block !important; height: auto !important; min-height: 0 !important; overflow: visible !important; padding: 0 !important; margin: 0 !important; background: #fff !important; }
+#seo-rep { position: static !important; visibility: visible !important; border: 0 !important; padding: 0 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+#seo-rep * { visibility: visible !important; }
+#seo-rep .tw { overflow: visible !important; }
+#seo-rep table { min-width: 0 !important; width: 100%; }
+#seo-rep .tile, #seo-rep tr, #seo-rep .ll > div { break-inside: avoid; }
+#seo-rep .ll.flat { max-height: none !important; }
+#seo-rep a { color: inherit; word-break: break-all; }
+</style></head><body><div class="seo-layout"><div class="seo"><div class="seo-app">${rep.outerHTML}</div></div></div></body></html>`);
+  doc.close();
+  const go = () => {
+    const t = document.title;
+    document.title = name; // Chrome uses the page title as the PDF file name
+    fr.contentWindow.focus();
+    fr.contentWindow.print();
+    setTimeout(() => { document.title = t; fr.remove(); }, 1000);
+  };
+  const links = [...doc.querySelectorAll('link[rel="stylesheet"]')];
+  const imgs = [...doc.images];
+  Promise.all([...links, ...imgs].map(el => new Promise(r => {
+    if ((el.tagName === "IMG" && el.complete) || (el.tagName === "LINK" && el.sheet)) return r();
+    el.addEventListener("load", r); el.addEventListener("error", r); setTimeout(r, 3000);
+  }))).then(() => setTimeout(go, 150));
+}
+
+const MAIN_T = ["backlink", "blog", "gmb", "poster"];
 
 function Logo({ src, size = 46 }) {
   return src ? <img src={src} alt="Nakshatra Namaha Creations" style={{ height: size, maxWidth: 180, objectFit: "contain" }} /> : <div className="lg" style={{ width: size, height: size }}>NNC</div>;
@@ -681,6 +728,15 @@ function ClientReport({ D, c, P, rp, person }) {
       <div><h4>Backlinks ({cnt("backlink")})</h4><List k="backlink" max={isAll ? 40 : isM ? 25 : 15} /></div>
       <div className="g2" style={{ alignItems: "start" }}><div><h4>Blogs ({cnt("blog")})</h4><List k="blog" max={10} /></div><div><h4>GMB posts ({cnt("gmb")})</h4><List k="gmb" max={10} /></div></div>
       <div><h4>Posters ({cnt("poster")})</h4><List k="poster" max={10} /></div>
+      {W.some(w => !MAIN_T.includes(w.type)) && (
+        <div><h4>Other work ({W.filter(w => !MAIN_T.includes(w.type)).length})</h4>
+          <div className="ll">
+            {W.filter(w => !MAIN_T.includes(w.type)).sort((a, b) => b.date.localeCompare(a.date)).map(w => (
+              <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span></div>
+            ))}
+          </div>
+        </div>
+      )}
       <p className="note" style={{ margin: 0 }}>Prepared by Nakshatra Namaha Creations · nakshatranamahacreations.com</p>
     </article>
   );
@@ -698,7 +754,8 @@ SEO work done
   • Backlinks built: ${n("backlink")}
   • Blogs published: ${n("blog")}
   • GMB posts: ${n("gmb")}
-  • Posters designed: ${n("poster")}
+  • Posters designed: ${n("poster")}${W.some(w => !MAIN_T.includes(w.type)) ? `
+  • Other work: ${W.filter(w => !MAIN_T.includes(w.type)).length}` : ""}
 ${c.ads ? `
 Google Ads
   • Amount spent: ${inr(s.spend)}
@@ -723,27 +780,28 @@ function TeamReport({ D, P, rp, who, client, av, mineC }) {
   return (
     <article className="rep" id="seo-rep">
       <div className="rh"><div style={{ display: "flex", gap: 14, alignItems: "center" }}><Logo src={D.logo} size={46} /><div><h2>Team summary<span>.</span></h2><p>{fd(P[0])} to {fd(P[1])} · {workdaysIn(P)} working days{el < 1 ? ` (${wdE} so far)` : ""}</p></div></div></div>
-      <div className="tw"><table><thead><tr><th>Team member</th><th className="r">Backlinks</th><th className="r">Blogs</th><th className="r">GMB posts</th><th className="r">Posters</th><th className="r">Ads reports</th><th className="r">Ad spend managed</th><th className="r">Leads from ads</th><th>Clients</th><th className="r">Per working day</th></tr></thead><tbody>
+      <div className="tw"><table><thead><tr><th>Team member</th><th className="r">Backlinks</th><th className="r">Blogs</th><th className="r">GMB posts</th><th className="r">Posters</th><th className="r">Other work</th><th className="r">Ads reports</th><th className="r">Ad spend managed</th><th className="r">Leads from ads</th><th>Clients</th><th className="r">Per working day</th></tr></thead><tbody>
         {T1.map(t => {
           const W = D.work.filter(w => w.who === t.id && inP(w, P)), A = D.ads.filter(r => r.who === t.id && inP(r, P)), s = adsAgg(A);
           const n = (k) => W.filter(w => w.type === k).length;
           const cl = [...new Set(W.map(w => w.cid).concat(A.map(a => a.cid)))].map(id => client(id)?.name).filter(Boolean);
           return (
             <tr key={t.id}>
-              <td><span className="who">{av(t.id)}<span><b style={{ fontWeight: 500 }}>{t.name}</b><span className="sub">{ROLE[t.role][0]}</span></span></span></td>
+              <td><span className="who">{av(t.id)}<span><b style={{ fontWeight: 500 }}>{t.name}</b><span className="sub">{ROLE[t.role]?.[0] || ""}</span></span></span></td>
               <td className="r num">{n("backlink") || "-"}</td><td className="r num">{n("blog") || "-"}</td><td className="r num">{n("gmb") || "-"}</td><td className="r num">{n("poster") || "-"}</td>
+              <td className="r num">{W.filter(w => !MAIN_T.includes(w.type)).length || "-"}</td>
               <td className="r num">{A.length || "-"}</td><td className="r num">{A.length ? inr(s.spend) : "-"}</td><td className="r num">{A.length ? s.conv : "-"}</td>
               <td style={{ maxWidth: 240 }}><span className="sub" style={{ color: "var(--text)" }}>{cl.join(", ") || "-"}</span></td>
               <td className="r num b">{((W.length + A.length) / wdE).toFixed(1)} items</td>
             </tr>
           );
         })}
-        {!T1.length && <tr><td colSpan={10} className="empty">No team members yet.</td></tr>}
+        {!T1.length && <tr><td colSpan={11} className="empty">No team members yet.</td></tr>}
       </tbody></table></div>
       <div className="tiles">{D.clients.filter(c => c.isActive !== false && mineC(c)).map(c => {
-        const W = D.work.filter(w => w.cid === c.id && inP(w, P)), f = isM ? 1 : 0.25;
+        const W = D.work.filter(w => w.cid === c.id && inP(w, P) && MAIN_T.includes(w.type)), f = isM ? 1 : 0.25;
         const tot = ["backlink", "blog", "gmb", "poster"].reduce((a, k) => a + Math.round((c.targets?.[k] || 0) * f), 0);
-        const ex = Math.max(1, Math.round(tot * el)), p = pct(W.length, ex);
+        const ex = Math.round(tot * el), p = ex ? pct(W.length, ex) : 100;
         return <div key={c.id} className="tile"><div className="l">{c.name}</div><div className="v">{p}%</div><div className="s">{W.length} done · {ex} expected by today · {tot} for the {isM ? "month" : "week"}</div><div className={`bar ${p >= 100 ? "ok" : p < 70 ? "red" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, p)}%` }} /></div></div>;
       })}</div>
     </article>
