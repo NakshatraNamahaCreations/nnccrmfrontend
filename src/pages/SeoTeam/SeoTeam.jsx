@@ -650,6 +650,14 @@ html, body { background: #fff !important; margin: 0; height: auto !important; ov
 }
 
 const MAIN_T = ["backlink", "blog", "gmb", "poster"];
+// what "other" work was, from the Employee Portal
+const KIND = { social: "Social media posts", webcontent: "Web content", blogcontent: "Blog content", landing: "Landing page", onpage: "On-page SEO", optimise: "Ads optimisation",
+  negative: "Negative keywords", newad: "New ad", campaign: "Campaign", position: "Keyword positions", monthly: "Monthly report", docs: "Documents", kwresearch: "Keyword research",
+  metaads: "Meta ads", tracking: "Tracking setup", indexing: "Page indexing", logo: "Logo design", vcard: "Visiting card", brochure: "Brochure", corpvideo: "Corporate video",
+  instavideo: "Instagram ad video", motion: "Motion graphics" };
+const kindL = (w) => KIND[w.kind] || "Other";
+const kindSum = (L) => { const g = {}; L.forEach(w => { const k = kindL(w); g[k] = (g[k] || 0) + 1; }); return Object.entries(g).sort((a, b) => b[1] - a[1]); };
+const ROLE_L = { seo: "SEO", ads: "Google Ads", design: "Design" };
 
 // the NNC logo is used unless another logo is uploaded
 function Logo({ src, size = 46 }) {
@@ -761,7 +769,7 @@ function ClientReport({ D, c, P, rp, person, rid = "seo-rep" }) {
         <div><h4>Other work ({W.filter(w => !MAIN_T.includes(w.type)).length})</h4>
           <div className="ll">
             {W.filter(w => !MAIN_T.includes(w.type)).sort((a, b) => b.date.localeCompare(a.date)).map(w => (
-              <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span></div>
+              <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><span className="pill p-grey" style={{ marginRight: 6 }}>{kindL(w)}</span><b style={{ fontWeight: 500 }}>{w.title || "-"}</b>{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span></div>
             ))}
           </div>
         </div>
@@ -784,7 +792,7 @@ SEO work done
   • Blogs published: ${n("blog")}
   • GMB posts: ${n("gmb")}
   • Posters designed: ${n("poster")}${W.some(w => !MAIN_T.includes(w.type)) ? `
-  • Other work: ${W.filter(w => !MAIN_T.includes(w.type)).length}` : ""}
+  • Other work: ${kindSum(W.filter(w => !MAIN_T.includes(w.type))).map(([k, n]) => `${k} ${n}`).join(", ")}` : ""}
 ${c.ads ? `
 Google Ads
   • Amount spent: ${inr(s.spend)}
@@ -810,23 +818,24 @@ function TeamReport({ D, P, rp, who, client, av, mineC }) {
   return (
     <article className="rep" id="seo-rep">
       <div className="rh"><div style={{ display: "flex", gap: 14, alignItems: "center" }}><Logo src={D.logo} size={46} /><div><h2>Team summary<span>.</span></h2><p>{fd(P[0])} to {fd(P[1])} · {workdaysIn(P)} working days{el < 1 ? ` (${wdE} so far)` : ""}</p></div></div></div>
-      <div className="tw"><table><thead><tr><th>Team member</th><th className="r">Backlinks</th><th className="r">Blogs</th><th className="r">GMB posts</th><th className="r">Posters</th><th className="r">Other work</th><th className="r">Ads reports</th><th className="r">Ad spend managed</th><th className="r">Leads from ads</th><th>Clients</th><th className="r">Per working day</th></tr></thead><tbody>
+      <div className="tw"><table><thead><tr><th>Team member</th><th className="r">Backlinks</th><th className="r">Blogs</th><th className="r">GMB posts</th><th className="r">Posters</th><th className="r">Social posts</th><th>Other work</th><th className="r">Ads reports</th><th className="r">Ad spend managed</th><th className="r">Leads from ads</th><th>Clients</th><th className="r">Per working day</th></tr></thead><tbody>
         {T1.map(t => {
           const W = D.work.filter(w => w.who === t.id && inP(w, P)), A = D.ads.filter(r => r.who === t.id && inP(r, P)), s = adsAgg(A);
           const n = (k) => W.filter(w => w.type === k).length;
           const cl = [...new Set(W.map(w => w.cid).concat(A.map(a => a.cid)))].map(id => client(id)?.name).filter(Boolean);
           return (
             <tr key={t.id}>
-              <td><span className="who">{av(t.id)}<span><b style={{ fontWeight: 500 }}>{t.name}</b><span className="sub">{ROLE[t.role]?.[0] || ""}</span></span></span></td>
+              <td><span className="who">{av(t.id)}<span><b style={{ fontWeight: 500 }}>{t.name}</b><span className="sub">{(t.roles?.length ? t.roles : [t.role]).map(r => ROLE_L[r] || r).join(", ")}</span></span></span></td>
               <td className="r num">{n("backlink") || "-"}</td><td className="r num">{n("blog") || "-"}</td><td className="r num">{n("gmb") || "-"}</td><td className="r num">{n("poster") || "-"}</td>
-              <td className="r num">{W.filter(w => !MAIN_T.includes(w.type)).length || "-"}</td>
+              <td className="r num">{W.filter(w => w.kind === "social").length || "-"}</td>
+              <td style={{ minWidth: 150 }}>{(() => { const o = kindSum(W.filter(w => !MAIN_T.includes(w.type) && w.kind !== "social")); return o.length ? <span className="sub" style={{ color: "var(--text)" }}>{o.map(([k, n]) => `${k} ${n}`).join(", ")}</span> : "-"; })()}</td>
               <td className="r num">{A.length || "-"}</td><td className="r num">{A.length ? inr(s.spend) : "-"}</td><td className="r num">{A.length ? s.conv : "-"}</td>
               <td style={{ maxWidth: 240 }}><span className="sub" style={{ color: "var(--text)" }}>{cl.join(", ") || "-"}</span></td>
               <td className="r num b">{((W.length + A.length) / wdE).toFixed(1)} items</td>
             </tr>
           );
         })}
-        {!T1.length && <tr><td colSpan={11} className="empty">No team members yet.</td></tr>}
+        {!T1.length && <tr><td colSpan={12} className="empty">No team members yet.</td></tr>}
       </tbody></table></div>
       <div className="tiles">{D.clients.filter(c => c.isActive !== false && mineC(c)).map(c => {
         const W = D.work.filter(w => w.cid === c.id && inP(w, P) && MAIN_T.includes(w.type)), f = tf;
