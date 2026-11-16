@@ -242,3 +242,9 @@
 .ep .pl-f { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 18px; border-bottom: 1px solid #EEF2F7; }
 .ep .pl-f input, .ep .pl-f select { height: 36px; border: 1px solid #E2E8F0; border-radius: 9px; padding: 0 10px; font: inherit; font-size: 13.5px; background: #fff; }
 .ep .pl-f input { width: 240px; max-width: 100%; }
+
+/* New since the tab was last opened */
+.ep .pill.p-new { background: #2563EB; color: #fff; font-weight: 600; }
+.ep tr.ep-new-row td { background: #F5F8FF; }
+.ep .ep-new { border-color: #BFD3FE; }
+.ep .ep-new h3 { color: #1D4ED8; }

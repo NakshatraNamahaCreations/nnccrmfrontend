@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Plus, RefreshCcw, Search, Edit2, UserX, Clock, Briefcase, Phone, Mail, X, TrendingUp, ChevronDown, ChevronUp, CalendarDays, Cake, BadgeCheck } from "lucide-react";
+import { Plus, RefreshCcw, Search, Edit2, UserX, UserCheck, Clock, Briefcase, Phone, Mail, X, TrendingUp, ChevronDown, ChevronUp, CalendarDays, Cake, BadgeCheck } from "lucide-react";
 import { toast } from "../../utils/toast";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -56,6 +56,7 @@ export default function EmployeesTab({ branch }) {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [search, setSearch] = useState("");
   const [filterBranch, setFilterBranch] = useState(branch || "");
+  const [filterStatus, setFilterStatus] = useState("active");
   const [hikeOpen, setHikeOpen] = useState(null); // empId with hike form open
   const [hikeHistoryOpen, setHikeHistoryOpen] = useState({}); // { [empId]: bool }
   const [hikeForm, setHikeForm] = useState({ salary: "", effectiveDate: "", hikePct: "", remarks: "" });
@@ -160,6 +161,17 @@ export default function EmployeesTab({ branch }) {
     } catch { toast.error("Failed to deactivate"); }
   };
 
+  const handleActivate = async (emp) => {
+    if (!window.confirm(`Make ${emp.name} active again?`)) return;
+    try {
+      const res  = await fetch(`${API}/api/attendance/employees/${emp._id}`, { method: "PUT", headers: { "Content-Type": "application/json", ...authHeader() }, body: JSON.stringify({ isActive: true }) });
+      const json = await res.json();
+      if (!res.ok || !json.success) { toast.error(json.message || "Failed to activate"); return; }
+      toast.success("Employee is active again");
+      fetchEmployees();
+    } catch { toast.error("Failed to activate"); }
+  };
+
   const addHike = async (empId) => {
     if (!hikeForm.salary || !hikeForm.effectiveDate) return toast.error("New salary and effective date are required");
     setHikeSaving(true);
@@ -181,7 +193,10 @@ export default function EmployeesTab({ branch }) {
 
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
+  const nActive = employees.filter(e => e.isActive !== false).length, nInactive = employees.length - nActive;
   const filtered = employees.filter(e => {
+    if (filterStatus === "active" && e.isActive === false) return false;
+    if (filterStatus === "inactive" && e.isActive !== false) return false;
     if (!search) return true;
     const q = search.toLowerCase();
     return (e.name || "").toLowerCase().includes(q) || (e.employeeId || "").toLowerCase().includes(q) || (e.designation || "").toLowerCase().includes(q);
@@ -206,6 +221,17 @@ export default function EmployeesTab({ branch }) {
         >
           <option value="">All Branches</option>
           {BRANCHES.map(b => <option key={b} value={b}>{b}</option>)}
+        </select>
+        <select
+          className="att-select"
+          value={filterStatus}
+          onChange={e => setFilterStatus(e.target.value)}
+          aria-label="Status"
+          style={{ padding: "8px 12px", borderRadius: 8, border: "1.5px solid #e2e8f0", fontSize: 13 }}
+        >
+          <option value="active">Active ({nActive})</option>
+          <option value="inactive">Inactive ({nInactive})</option>
+          <option value="all">All employees ({employees.length})</option>
         </select>
         <div className="att-toolbar-right">
           <button className="att-btn-sec" onClick={fetchEmployees}>
@@ -401,7 +427,7 @@ export default function EmployeesTab({ branch }) {
               )}
 
               <div className="att-emp-card-footer">
-                <div className={`att-emp-actions n${emp.isActive !== false ? 3 : 1}`}>
+                <div className={`att-emp-actions n${emp.isActive !== false ? 3 : 2}`}>
                   {emp.isActive !== false && (
                     <button className="att-btn-ghost" style={{ color: "#059669" }} onClick={() => { setHikeOpen(emp._id); setHikeForm({ salary: "", effectiveDate: new Date().toISOString().split("T")[0], hikePct: "", remarks: "" }); }}>
                       <TrendingUp size={13} /> Hike
@@ -413,6 +439,11 @@ export default function EmployeesTab({ branch }) {
                   {emp.isActive !== false && (
                     <button className="att-btn-ghost danger" onClick={() => handleDeactivate(emp._id)}>
                       <UserX size={13} /> Deactivate
+                    </button>
+                  )}
+                  {emp.isActive === false && (
+                    <button className="att-btn-ghost" style={{ color: "#059669" }} onClick={() => handleActivate(emp)}>
+                      <UserCheck size={13} /> Activate
                     </button>
                   )}
                 </div>

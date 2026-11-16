@@ -10,7 +10,7 @@ import "../SeoTeam/SeoTeam.css";
 import "./EmployeePortal.css";
 import PortalChat from "./PortalChat";
 import Pager from "../LeadTracker/Pager";
-import { markSeen, fetchPortalCounts } from "../../utils/portalSeen";
+import { markSeen, fetchPortalCounts, getSeen } from "../../utils/portalSeen";
 
 // Approvals and the work employees log in the NNC Employee Portal (/api/portal/admin)
 const papi = (path, opts) => billingApi(`/portal/admin${path}`, opts);
@@ -141,7 +141,11 @@ export default function EmployeePortal() {
     window.addEventListener("nnc-portal-seen", load);
     return () => { live = false; clearInterval(id); window.removeEventListener("nnc-portal-seen", load); };
   }, []);
-  const open = (k) => { setTab(k); markSeen(k); };
+  const [since, setSince] = useState({});
+  const open = (k) => {
+    setSince(s => ({ ...s, [k]: getSeen()[k] || new Date(Date.now() - 864e5).toISOString() }));
+    setTab(k); markSeen(k);
+  };
   const badge = (k) => k === "people" ? pending : k === "messages" ? (unread ?? cnt.messages ?? 0) : tab === k ? 0 : (cnt[k] || 0);
   return (
     <div className="seo-layout ep">
@@ -162,11 +166,11 @@ export default function EmployeePortal() {
           <>
             {tab === "people" && <People A={A} />}
             {tab === "messages" && <PortalChat onUnread={setUnread} />}
-            {tab === "plans" && <Plans accounts={A.data || []} />}
-            {tab === "work" && <Work accounts={A.data || []} />}
-            {tab === "meetings" && <Meetings />}
-            {tab === "docs" && <SharedDocs />}
-            {tab === "tasks" && <Tasks accounts={A.data || []} />}
+            {tab === "plans" && <Plans accounts={A.data || []} since={since.plans} />}
+            {tab === "work" && <Work accounts={A.data || []} since={since.work} />}
+            {tab === "meetings" && <Meetings since={since.meetings} />}
+            {tab === "docs" && <SharedDocs since={since.docs} />}
+            {tab === "tasks" && <Tasks accounts={A.data || []} since={since.tasks} />}
             {tab === "settings" && <Settings />}
           </>
         )}
@@ -175,6 +179,11 @@ export default function EmployeePortal() {
     </div>
   );
 }
+
+// "New": sent since this tab was last opened
+const istDay = (d) => new Date(new Date(d).getTime() + 330 * 60000).toISOString().slice(0, 10);
+const isNew = (since, at) => !!since && !!at && new Date(at) > new Date(since);
+const NewPill = () => <span className="pill p-new">New</span>;
 
 /* ───────── Employees and approvals ───────── */
 function People({ A }) {
@@ -444,7 +453,7 @@ function attTxt(L) {
   return `In ${tm(L[0].in)}${open ? " · still in" : last ? ` · Out ${tm(last.out)}` : ""} · ${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, "0")}m${L.length > 1 ? ` (${L.length} sessions)` : ""}`;
 }
 
-function Work({ accounts, today }) {
+function Work({ accounts, today, since }) {
   const [rg, setRg] = useState(today ? "today" : "week");
   const [cf, setCf] = useState(T(-6)), [ct, setCt] = useState(T(0));   // custom dates
   const [team, setTeam] = useState("all");
@@ -453,10 +462,10 @@ function Work({ accounts, today }) {
   const [person, setPerson] = useState(null);   // Work log: the employee whose work is open
   const [from, to] = rangeDays(today ? "today" : rg, cf, ct);
   const period = rg === "custom" ? (from === to ? fd(from) : `${fd(from)} to ${fd(to)}`) : RANGES.find(r => r[0] === rg)[1];
-  const W = useGet(`/work?from=${from}&to=${to}`);
+  const W = useGet(`/work?from=${from}&to=${to}${since ? `&since=${encodeURIComponent(since)}` : ""}`);
   const ref = to > T(0) ? T(0) : to;                    // the day shown in the check in / out columns
   const refL = ref === T(0) ? "today" : fd(ref);
-  const d = W.data || { accounts: [], work: [], days: [], blockers: [], attendance: [] };
+  const d = W.data || { accounts: [], work: [], days: [], blockers: [], attendance: [], fresh: [] };
   const roles = TEAMS[team][1];
   const accs = d.accounts.filter(a => !roles || anyRole(a, roles));
   const ids = new Set(accs.map(a => a.id));
@@ -473,6 +482,9 @@ function Work({ accounts, today }) {
   }).sort((x, y) => y.hrs - x.hrs);
   const resolve = async (id) => { try { await papi(`/blockers/${id}/resolve`, { method: "PUT" }); toast.success("Marked as sorted"); W.reload(); } catch (ex) { toast.error(ex.message); } };
   const tw = work.filter(w => w.date === ref);
+  // sent since the Work log was last opened (any date, also work logged late for an older day)
+  const fresh = (d.fresh || []).filter(w => ids.has(String(w.account)) && (!who || String(w.account) === who));
+  const newOf = (id) => fresh.filter(w => String(w.account) === id).length;
   // Excel (CSV) of the work log for this period: every item, then each person's total
   const exportLog = () => {
     const att = (id, dt) => (d.attendance || []).find(x => String(x.account) === id && x.date === dt)?.sessions || [];
@@ -537,6 +549,19 @@ function Work({ accounts, today }) {
               <button type="button" className="btn sm" onClick={() => resolve(b._id)}>Sorted</button></div>
           ))}</div></div>
       )}
+      {!today && fresh.length > 0 && (
+        <div className="card ep-new"><h3>New since you last opened the Work log <small>{fresh.length} item{fresh.length === 1 ? "" : "s"}</small></h3>
+          <div className="ll flat">{fresh.map(e => (
+            <div key={e._id}>
+              <span className="d">{fd(e.date)}</span>
+              <span className="x"><NewPill /> <span className="pill p-other">{TY[e.type] || e.type}</span> <b>{e.title}</b>
+                <span className="sub">{[acc(e.account)?.name, e.refName, metaTxt(e), e.date !== istDay(e.createdAt) ? `sent ${fd(istDay(e.createdAt))}, for ${fd(e.date)}` : ""].filter(Boolean).join(" · ")}</span>
+                {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}</span>
+              <span className="num">{h1(e.hrs)} h</span>
+            </div>
+          ))}</div>
+        </div>
+      )}
       {today ? (
       <div className="ep-grid">
         <div className="card"><h3>{today ? "Logged today" : "Work logged"} <small>{work.length} items · {h1(work.reduce((s, w) => s + (w.hrs || 0), 0))} h</small></h3>
@@ -576,7 +601,7 @@ function Work({ accounts, today }) {
                 const S = p.att?.sessions || [], open = S.find(x => !x.out), last = [...S].reverse().find(x => x.out);
                 return (
                   <tr key={p.a.id} onClick={() => setPerson(p.a.id)}>
-                    <td><div className="ep-who"><Av name={p.a.name} role={p.a.role} /><span><b>{p.a.name}</b><span className="sub">{roleNames(p.a)}</span></span></div></td>
+                    <td><div className="ep-who"><Av name={p.a.name} role={p.a.role} /><span><b>{p.a.name}</b>{newOf(p.a.id) > 0 && <> <span className="pill p-new">{newOf(p.a.id)} new</span></>}<span className="sub">{roleNames(p.a)}</span></span></div></td>
                     <td>{S.length ? <b>{tm(S[0].in)}</b> : <span className="sub">Not checked in</span>}</td>
                     <td>{open ? <span className="pill p-ok">Still in</span> : last ? <b>{tm(last.out)}</b> : <span className="sub">-</span>}
                       {S.length > 0 && <span className="sub">{attTxt(S).split(" · ").pop()}</span>}</td>
@@ -775,7 +800,7 @@ function ProjectPick({ who, loading, list }) {
 }
 
 /* ───────── Tasks ───────── */
-function Tasks({ accounts }) {
+function Tasks({ accounts, since }) {
   const Tk = useGet("/tasks");
   const [f, setF] = useState("open");
   const [assign, setAssign] = useState(false);
@@ -791,7 +816,7 @@ function Tasks({ accounts }) {
       <div className="card"><h3>Tasks assigned from the CRM <small>{L.length}</small></h3>
         <div className="tw"><table><thead><tr><th>Task</th><th>Employee</th><th>Client or project</th><th>Due</th><th>Status</th><th>By</th></tr></thead>
           <tbody>{Tk.loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : L.length ? L.map(t => (
-            <tr key={t._id}><td><b>{t.title}</b></td><td>{t.account?.name || "-"}</td><td>{t.refName || "-"}</td><td>{fd(t.due)}</td>
+            <tr key={t._id} className={isNew(since, t.updatedAt) && t.status !== "todo" ? "ep-new-row" : ""}><td>{isNew(since, t.updatedAt) && t.status !== "todo" && <><NewPill /> </>}<b>{t.title}</b></td><td>{t.account?.name || "-"}</td><td>{t.refName || "-"}</td><td>{fd(t.due)}</td>
               <td>{t.status === "done" ? <span className="pill p-ok">Done {t.doneOn ? fd(t.doneOn) : ""}</span> : t.due < T(0) ? <span className="pill p-red">Overdue</span> : t.status === "doing" ? <span className="pill p-blue">Doing</span> : <span className="pill p-other">To do</span>}</td>
               <td>{t.from}</td></tr>
           )) : <tr><td colSpan={6}><div className="empty">No tasks here.</div></td></tr>}</tbody></table></div></div>
@@ -802,7 +827,7 @@ function Tasks({ accounts }) {
 
 /* ───────── Plans for today ───────── */
 // What each employee planned for the day in the portal, and how much of it is ticked off
-function Plans({ accounts }) {
+function Plans({ accounts, since }) {
   const [date, setDate] = useState(T(0));
   const [team, setTeam] = useState("all");
   const [q, setQ] = useState("");
@@ -842,6 +867,7 @@ function Plans({ accounts }) {
                     <div className="ep-plan-h">
                       <Av name={p.account.name} role={p.account.role} />
                       <div className="nm"><b>{p.account.name}</b><span className="sub">{roleNames(p.account)}{p.account.branch ? ` · ${p.account.branch}` : ""}</span></div>
+                      {isNew(since, p.updatedAt) && <NewPill />}
                       <span className={`pill ${n === p.items.length ? "p-ok" : "p-other"}`}>{n} of {p.items.length} done</span>
                     </div>
                     <div className="ep-plan-bar"><i style={{ width: `${Math.round((n / p.items.length) * 100)}%` }} /></div>
@@ -864,7 +890,7 @@ function Plans({ accounts }) {
             <div className="card" style={{ marginBottom: 14 }}><h3>{isToday ? "Not added a plan yet" : "No plan that day"} <small>{missing.length}</small></h3>
               <div className="ep-miss">{missing.map(a => <span key={a.id}>{a.name}</span>)}</div></div>
           )}
-          <PlanReports list={D.data?.reports || []} />
+          <PlanReports list={D.data?.reports || []} since={since} />
         </>
       )}
     </>
@@ -872,7 +898,7 @@ function Plans({ accounts }) {
 }
 
 // Reports the team plans lead sent from the portal: everyone's plans as they were, a note and files
-function PlanReports({ list }) {
+function PlanReports({ list, since }) {
   const [open, setOpen] = useState("");
   const tm = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
   const href = (u) => (/^https?:/.test(u) ? u : `${API}${u}`);
@@ -884,7 +910,7 @@ function PlanReports({ list }) {
           <div key={r._id} className="ep-rep">
             <div className="ep-rep-h">
               <Av name={r.account?.name} role={r.account?.role} />
-              <div className="nm"><b>{r.account?.name || "Employee"}</b><span className="sub">Sent at {tm(r.createdAt)} · {r.plans.length} people · {n} plans, {dn} done{r.missing.length ? ` · ${r.missing.length} without a plan` : ""}</span></div>
+              <div className="nm"><b>{r.account?.name || "Employee"}</b>{isNew(since, r.createdAt) && <> <NewPill /></>}<span className="sub">Sent at {tm(r.createdAt)} · {r.plans.length} people · {n} plans, {dn} done{r.missing.length ? ` · ${r.missing.length} without a plan` : ""}</span></div>
               <button type="button" className="btn sm" onClick={() => setOpen(o => (o === r._id ? "" : r._id))}>{open === r._id ? "Hide plans" : "See plans"}</button>
             </div>
             {r.note && <pre className="ep-mom">{r.note}</pre>}
@@ -907,7 +933,7 @@ function PlanReports({ list }) {
 
 /* ───────── Meetings ───────── */
 // Documents employees sent each other (for example a tester to a developer), with replies
-function SharedDocs() {
+function SharedDocs({ since }) {
   const D = useGet("/docs");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
@@ -927,8 +953,8 @@ function SharedDocs() {
       <div className="card"><div className="tw"><table>
         <thead><tr><th>Document</th><th>From</th><th>To</th><th>Project</th><th>Sent</th><th>Status</th><th /></tr></thead>
         <tbody>{D.loading ? <tr><td colSpan={7}><div className="empty">Loading…</div></td></tr> : D.err ? <tr><td colSpan={7}><div className="empty err">{D.err}</div></td></tr> : L.length ? L.map(d => (
-          <tr key={d._id}>
-            <td><b>{d.title}</b><span className="sub">{d.files.length} file{d.files.length === 1 ? "" : "s"}{d.replies.length ? ` · ${d.replies.length} repl${d.replies.length === 1 ? "y" : "ies"}` : ""}</span></td>
+          <tr key={d._id} className={isNew(since, d.createdAt) ? "ep-new-row" : ""}>
+            <td>{isNew(since, d.createdAt) && <><NewPill /> </>}<b>{d.title}</b><span className="sub">{d.files.length} file{d.files.length === 1 ? "" : "s"}{d.replies.length ? ` · ${d.replies.length} repl${d.replies.length === 1 ? "y" : "ies"}` : ""}</span></td>
             <td>{d.fromName}</td><td>{d.toName}</td><td>{d.refName || "-"}</td><td>{tm(d.createdAt)}</td>
             <td>{d.done ? <span className="pill p-ok">Done</span> : d.seenAt ? <span className="pill p-blue">Seen</span> : <span className="pill p-amb">Not opened</span>}</td>
             <td className="r"><button type="button" className="btn sm" onClick={() => setOpen(d)}>View</button></td>
@@ -953,7 +979,7 @@ function SharedDocs() {
   );
 }
 
-function Meetings() {
+function Meetings({ since }) {
   const M = useGet("/meetings");
   const [open, setOpen] = useState(null);
   const all = M.data || [];
@@ -1005,8 +1031,8 @@ function Meetings() {
       <div className="card"><div className="tw"><table>
         <thead><tr><th>Meeting</th><th>Client or project</th><th>By</th><th>When</th><th>MOM</th><th /></tr></thead>
         <tbody>{M.loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : M.err ? <tr><td colSpan={6}><div className="empty err">{M.err}</div></td></tr> : shown.length ? shown.map(m => (
-          <tr key={m._id}>
-            <td><b>{m.title}</b><span className="sub">{m.mode}</span></td>
+          <tr key={m._id} className={isNew(since, m.createdAt) ? "ep-new-row" : ""}>
+            <td>{isNew(since, m.createdAt) && <><NewPill /> </>}<b>{m.title}</b><span className="sub">{m.mode}</span></td>
             <td>{m.refName || "Internal"}</td>
             <td>{m.account?.name || "-"}<span className="sub">{ROLES[m.account?.role]?.[0]}</span></td>
             <td>{fdw(m.date)}{m.time ? `, ${m.time}` : ""}</td>
