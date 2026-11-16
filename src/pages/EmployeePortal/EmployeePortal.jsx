@@ -20,7 +20,7 @@ const ROLES = {
   app: ["App developer", "Development", "#2563EB"], web: ["Website developer", "Development", "#0D9488"], back: ["Backend developer", "Development", "#4F46E5"], full: ["Full stack developer", "Development", "#0369A1"],
   ux: ["UI/UX designer", "Design", "#DB2777"], test: ["Tester", "Testing", "#7C3AED"], other: ["Team member", "Development", "#64748B"], acc: ["Accountant", "Accounts", "#475569"],
 };
-const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seox", "ads", "gfx", "vid"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test", "other"]], acc: ["Accounts", ["acc"]] };
+const TEAMS = { all: ["Everyone", null], seo: ["Digital Marketing", ["seo", "seox", "ads", "gfx", "vid"]], dev: ["Development and design", ["app", "web", "back", "full", "ux", "test", "other"]] };
 const PROJECT_ROLES = ["app", "web", "back", "full", "ux", "test", "other"];   // put on projects
 const SEO_ROLES = ["seo", "seox", "ads", "gfx", "vid"];                             // put on SEO clients
 const DEPTS = ["Development", "Design", "Testing", "Digital Marketing", "Accounts"];
