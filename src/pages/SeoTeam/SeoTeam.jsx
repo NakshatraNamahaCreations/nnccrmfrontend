@@ -11,6 +11,7 @@ import {
 } from "./seoUtil";
 import { WorkForm, AdsForm, AdsView, KeywordView, RankForm, KeywordAdd, ClientForm, MemberForm } from "./SeoForms";
 import "./SeoTeam.css";
+import nncLogo from "../../assets/nnclogo.png";
 
 const TABS = [["today", "Today"], ["work", "Work log"], ["ads", "Google Ads"], ["meta", "Meta Ads"], ["ranks", "Keyword positions"], ["history", "Activity history"], ["reports", "PDF reports"], ["clients", "Clients and settings"]];
 
@@ -592,7 +593,7 @@ function printReport(name) {
     .map(n => (n.tagName === "LINK" ? `<link rel="stylesheet" href="${n.href}">` : n.outerHTML)).join("");
   const doc = fr.contentDocument;
   doc.open();
-  doc.write(`<!doctype html><html><head><meta charset="utf-8"><title>${name.replace(/</g, "")}</title>${styles}
+  doc.write(`<!doctype html><html><head><meta charset="utf-8"><base href="${location.origin}/"><title>${name.replace(/</g, "")}</title>${styles}
 <style>
 @page { size: A4; margin: 12mm; }
 html, body { background: #fff !important; margin: 0; height: auto !important; overflow: visible !important; }
@@ -623,7 +624,9 @@ html, body { background: #fff !important; margin: 0; height: auto !important; ov
 
 const MAIN_T = ["backlink", "blog", "gmb", "poster"];
 
+// the NNC logo is used unless another logo is uploaded
 function Logo({ src, size = 46 }) {
+  src = src || nncLogo;
   return src ? <img src={src} alt="Nakshatra Namaha Creations" style={{ height: size, maxWidth: 180, objectFit: "contain" }} /> : <div className="lg" style={{ width: size, height: size }}>NNC</div>;
 }
 
@@ -880,7 +883,7 @@ function ClientsView({ D, setModal, load }) {
       <div className="card"><h3>Report branding</h3>
         <div style={{ padding: 16, display: "flex", gap: 18, alignItems: "center", flexWrap: "wrap" }}>
           <Logo src={D.logo} size={60} />
-          <label className="f" style={{ maxWidth: 360 }}><span className="flabel">Upload your logo (PNG, JPG or SVG, under 500 KB). It appears at the top of every PDF report.</span>
+          <label className="f" style={{ maxWidth: 360 }}><span className="flabel">The NNC logo is used by default. Upload another logo (PNG, JPG or SVG, under 500 KB). It appears at the top of every PDF report.</span>
             <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={e => onLogo(e.target.files[0])} /></label>
           {D.logo && <button type="button" className="btn" onClick={async () => { await seoApi("/settings", { method: "PUT", body: { logo: "" } }); load(); }}>Remove logo</button>}
         </div>
