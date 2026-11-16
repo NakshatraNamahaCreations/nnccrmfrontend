@@ -546,13 +546,21 @@ function HistoryView({ D, active, mineC, av, sel, setSel, setTab }) {
 function ReportsView({ D, active, mineC, client, person, av, sel, setSel, who }) {
   const [mode, setMode] = useState("client");
   const rp0 = sel.rp || "month", rp = mode === "team" && rp0 === "all" ? "month" : rp0;
-  const C = active.filter(mineC);
-  const rc = C.some(c => c.id === sel.rc) ? sel.rc : C[0]?.id;
-  const c = client(rc);
-  const first = c ? [c.start, ...D.work.filter(w => w.cid === c.id).map(w => w.date), ...D.ads.filter(r => r.cid === c.id).map(r => r.date)].filter(Boolean).sort()[0] || T(0) : T(0);
-  const P = rp === "all" && c ? [first < T(0) ? first : T(0), T(0)] : period(rp === "all" ? "month" : rp);
-  const fileName = mode === "client" && c
-    ? `${c.name} - ${rp === "all" ? "Full report" : rp.includes("month") ? "Monthly report" : "Weekly report"} - ${fd(P[0])} to ${fd(P[1])}`
+  // active clients first, then inactive ones (marked)
+  const C = active.filter(mineC), CI = D.clients.filter(x => x.isActive === false && mineC(x));
+  const CL = [...C, ...CI];
+  const allC = sel.rc === "*";
+  const rc = allC ? "*" : CL.some(c => c.id === sel.rc) ? sel.rc : C[0]?.id;
+  const c = allC ? null : client(rc);
+  // custom dates: from and to, kept in order
+  const cf = sel.cf || monthOf(T(0))[0], ct = sel.ct || T(0);
+  const CP = cf <= ct ? [cf, ct] : [ct, cf];
+  const firstOf = (x) => { const f = [x.start, ...D.work.filter(w => w.cid === x.id).map(w => w.date), ...D.ads.filter(r => r.cid === x.id).map(r => r.date)].filter(Boolean).sort()[0] || T(0); return f < T(0) ? f : T(0); };
+  const perOf = (x) => (rp === "custom" ? CP : rp === "all" && x ? [firstOf(x), T(0)] : period(rp === "all" ? "month" : rp));
+  const P = perOf(c);
+  const kind = rp === "all" ? "Full report" : rp === "custom" ? "Report" : rp.includes("month") ? "Monthly report" : "Weekly report";
+  const fileName = mode === "client" && (c || allC)
+    ? `${allC ? "All clients" : c.name} - ${kind}${rp === "all" && allC ? "" : ` - ${fd(P[0])} to ${fd(P[1])}`}`
     : `Team summary - ${fd(P[0])} to ${fd(P[1])}`;
   const shareWa = () => {
     const txt = repText(c, P, rp, D);
@@ -565,17 +573,33 @@ function ReportsView({ D, active, mineC, client, person, av, sel, setSel, who })
       <p className="lead noprint">Weekly, monthly or full since-day-1 reports with your logo. “Download PDF” opens the print window: choose “Save as PDF”.</p>
       <div className="filters noprint">
         <div className="seg"><button type="button" className={`chip${mode === "client" ? " on" : ""}`} onClick={() => setMode("client")}>By client</button><button type="button" className={`chip${mode === "team" ? " on" : ""}`} onClick={() => setMode("team")}>By team member</button></div>
-        {mode === "client" && <ClientSelect list={C} value={rc} onChange={v => setSel(s => ({ ...s, rc: v }))} />}
+        {mode === "client" && (
+          <select value={rc || ""} onChange={e => setSel(s => ({ ...s, rc: e.target.value }))} aria-label="Client">
+            <option value="*">All clients ({CL.length})</option>
+            {C.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
+            {CI.length > 0 && <optgroup label="Inactive">{CI.map(x => <option key={x.id} value={x.id}>{x.name} (inactive)</option>)}</optgroup>}
+          </select>
+        )}
         <select value={rp} onChange={e => setSel(s => ({ ...s, rp: e.target.value }))} aria-label="Period">
           {["week", "lweek", "month", "lmonth"].map(k => <option key={k} value={k}>{k.includes("month") ? "Monthly" : "Weekly"}: {PER[k].toLowerCase()} ({fds(period(k)[0])} to {fds(period(k)[1])})</option>)}
           {mode === "client" && <option value="all">Full report since day 1</option>}
+          <option value="custom">Custom dates</option>
         </select>
+        {rp === "custom" && (
+          <span className="rp-cd">
+            <input type="date" value={cf} max={T(0)} onChange={e => e.target.value && setSel(s => ({ ...s, cf: e.target.value }))} aria-label="From" />
+            <span className="sub">to</span>
+            <input type="date" value={ct} max={T(0)} onChange={e => e.target.value && setSel(s => ({ ...s, ct: e.target.value }))} aria-label="To" />
+          </span>
+        )}
         <span style={{ flex: 1 }} />
         <button type="button" className="btn" onClick={() => printReport(fileName)}>Download PDF</button>
         {mode === "client" && c && <button type="button" className="btn wa" onClick={shareWa}>Share summary on WhatsApp</button>}
       </div>
       {mode === "client"
-        ? (c ? <ClientReport D={D} c={c} P={P} rp={rp} person={person} /> : <div className="empty">No client.</div>)
+        ? (allC
+          ? (CL.length ? <div id="seo-rep" className="rep-all">{CL.map(x => <ClientReport key={x.id} D={D} c={x} P={perOf(x)} rp={rp} person={person} rid={null} />)}</div> : <div className="empty">No client.</div>)
+          : c ? <ClientReport D={D} c={c} P={P} rp={rp} person={person} /> : <div className="empty">No client.</div>)
         : <TeamReport D={D} P={P} rp={rp} who={who} client={client} av={av} mineC={mineC} />}
     </>
   );
@@ -604,6 +628,9 @@ html, body { background: #fff !important; margin: 0; height: auto !important; ov
 #seo-rep table { min-width: 0 !important; width: 100%; }
 #seo-rep .tile, #seo-rep tr, #seo-rep .ll > div { break-inside: avoid; }
 #seo-rep .ll.flat { max-height: none !important; }
+#seo-rep.rep-all { display: block !important; }
+#seo-rep.rep-all > .rep { border: 0 !important; padding: 0 !important; }
+#seo-rep.rep-all > .rep + .rep { break-before: page; margin-top: 0 !important; }
 #seo-rep a { color: inherit; word-break: break-all; }
 </style></head><body><div class="seo-layout"><div class="seo"><div class="seo-app">${rep.outerHTML}</div></div></div></body></html>`);
   doc.close();
@@ -630,12 +657,12 @@ function Logo({ src, size = 46 }) {
   return src ? <img src={src} alt="Nakshatra Namaha Creations" style={{ height: size, maxWidth: 180, objectFit: "contain" }} /> : <div className="lg" style={{ width: size, height: size }}>NNC</div>;
 }
 
-function ClientReport({ D, c, P, rp, person }) {
+function ClientReport({ D, c, P, rp, person, rid = "seo-rep" }) {
   const W = D.work.filter(w => w.cid === c.id && inP(w, P));
   const A = D.ads.filter(r => r.cid === c.id && inP(r, P));
   const s = adsAgg(A);
-  const isAll = rp === "all", isM = rp.includes("month");
-  const f = isAll ? Math.max(1, Math.round((parse(P[1]) - parse(P[0])) / 864e5) / 30) : isM ? 1 : 0.25;
+  const isAll = rp === "all", isM = rp.includes("month"), isC = rp === "custom";
+  const f = isC ? (Math.round((parse(P[1]) - parse(P[0])) / 864e5) + 1) / 30 : isAll ? Math.max(1, Math.round((parse(P[1]) - parse(P[0])) / 864e5) / 30) : isM ? 1 : 0.25;
   const cnt = (k) => W.filter(w => w.type === k).length;
   const tgt = (k) => Math.round((c.targets?.[k] || 0) * f);
   const elapsed = P[1] > T(0) ? workdaysIn([P[0], T(0)]) / Math.max(1, workdaysIn(P)) : 1;
@@ -645,15 +672,14 @@ function ClientReport({ D, c, P, rp, person }) {
       <div className="s">Target {tgt(k)}{elapsed < 1 ? ` · expected by today ${exp(k)}${cnt(k) >= exp(k) ? " (on track)" : " (behind)"}` : ` · ${pct(cnt(k), tgt(k))}%`}</div>
       <div className={`bar ${cnt(k) >= tgt(k) ? "ok" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, pct(cnt(k), tgt(k)))}%` }} /></div></div>
   );
-  const List = ({ k, max }) => {
+  const List = ({ k }) => {
     const L = W.filter(w => w.type === k).sort((a, b) => b.date.localeCompare(a.date));
     if (!L.length) return <p className="note">None in this period.</p>;
     return (
       <div className="ll">
-        {L.slice(0, max).map(w => (
+        {L.map(w => (
           <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.kw ? ` · ${w.kw}` : ""}{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span>{w.da ? <span className="pill p-grey">DA {w.da}</span> : null}</div>
         ))}
-        {L.length > max && <div className="note">+ {L.length - max} more (export from the Work log)</div>}
       </div>
     );
   };
@@ -677,9 +703,9 @@ function ClientReport({ D, c, P, rp, person }) {
   const K = (D.kws[c.id] || []).filter(e => e.hist.length);
   const krows = K.map(e => ({ e, s: kwStat(e, P) })).sort((a, b) => posVal(a.s.cur.pos) - posVal(b.s.cur.pos));
   const d0 = dist(K, x => x.first), d1 = dist(K, x => x.cur);
-  const title = isAll ? "Full SEO and Google Ads report since day 1" : isM ? "Monthly SEO and Google Ads report" : "Weekly SEO and Google Ads report";
+  const title = isAll ? "Full SEO and Google Ads report since day 1" : isC ? "SEO and Google Ads report" : isM ? "Monthly SEO and Google Ads report" : "Weekly SEO and Google Ads report";
   return (
-    <article className="rep" id="seo-rep">
+    <article className="rep" id={rid || undefined}>
       <div className="rh">
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}><Logo src={D.logo} size={52} /><div><h2>{c.name}<span>.</span></h2><p>{title} · {fd(P[0])} to {fd(P[1])}</p></div></div>
         <div style={{ textAlign: "right" }}><p style={{ margin: 0, fontSize: 13, color: "var(--navy)", fontWeight: 600 }}>{c.site}</p>
@@ -723,14 +749,14 @@ function ClientReport({ D, c, P, rp, person }) {
             </div>
           )}
           <div className="g2" style={{ marginTop: 12, alignItems: "start" }}>
-            <div><h4 style={{ fontSize: 13 }}>Searches that brought leads</h4><div className="ll">{s.terms.filter(t => t.conv).slice(0, 6).map(t => <div key={t.t}><span className="x">{t.t}</span><b>{t.conv} lead{t.conv > 1 ? "s" : ""}</b><span className="note">{inr(t.cost)}</span></div>)}{!s.terms.some(t => t.conv) && <div className="note">None</div>}</div></div>
-            <div><h4 style={{ fontSize: 13 }}>Irrelevant searches blocked</h4><div className="ll">{s.negs.slice(0, 8).map(n => <div key={n}><span className="x">{n}</span></div>)}{!s.negs.length && <div className="note">None added</div>}</div></div>
+            <div><h4 style={{ fontSize: 13 }}>Searches that brought leads</h4><div className="ll">{s.terms.filter(t => t.conv).map(t => <div key={t.t}><span className="x">{t.t}</span><b>{t.conv} lead{t.conv > 1 ? "s" : ""}</b><span className="note">{inr(t.cost)}</span></div>)}{!s.terms.some(t => t.conv) && <div className="note">None</div>}</div></div>
+            <div><h4 style={{ fontSize: 13 }}>Irrelevant searches blocked</h4><div className="ll">{s.negs.map(n => <div key={n}><span className="x">{n}</span></div>)}{!s.negs.length && <div className="note">None added</div>}</div></div>
           </div>
         </div>
       )}
-      <div><h4>Backlinks ({cnt("backlink")})</h4><List k="backlink" max={isAll ? 40 : isM ? 25 : 15} /></div>
-      <div className="g2" style={{ alignItems: "start" }}><div><h4>Blogs ({cnt("blog")})</h4><List k="blog" max={10} /></div><div><h4>GMB posts ({cnt("gmb")})</h4><List k="gmb" max={10} /></div></div>
-      <div><h4>Posters ({cnt("poster")})</h4><List k="poster" max={10} /></div>
+      <div><h4>Backlinks ({cnt("backlink")})</h4><List k="backlink" /></div>
+      <div className="g2" style={{ alignItems: "start" }}><div><h4>Blogs ({cnt("blog")})</h4><List k="blog" /></div><div><h4>GMB posts ({cnt("gmb")})</h4><List k="gmb" /></div></div>
+      <div><h4>Posters ({cnt("poster")})</h4><List k="poster" /></div>
       {W.some(w => !MAIN_T.includes(w.type)) && (
         <div><h4>Other work ({W.filter(w => !MAIN_T.includes(w.type)).length})</h4>
           <div className="ll">
@@ -779,7 +805,8 @@ SEO and Ads team, Nakshatra Namaha Creations`;
 function TeamReport({ D, P, rp, who, client, av, mineC }) {
   const T1 = D.team.filter(t => (who === "all" || t.id === who) && t.portal !== false && t.isActive !== false);
   const wdE = Math.max(1, workdaysIn([P[0], P[1] < T(0) ? P[1] : T(0)])), el = wdE / Math.max(1, workdaysIn(P));
-  const isM = rp.includes("month");
+  const isM = rp.includes("month"), isC = rp === "custom";
+  const tf = isC ? (Math.round((parse(P[1]) - parse(P[0])) / 864e5) + 1) / 30 : isM ? 1 : 0.25;
   return (
     <article className="rep" id="seo-rep">
       <div className="rh"><div style={{ display: "flex", gap: 14, alignItems: "center" }}><Logo src={D.logo} size={46} /><div><h2>Team summary<span>.</span></h2><p>{fd(P[0])} to {fd(P[1])} · {workdaysIn(P)} working days{el < 1 ? ` (${wdE} so far)` : ""}</p></div></div></div>
@@ -802,10 +829,10 @@ function TeamReport({ D, P, rp, who, client, av, mineC }) {
         {!T1.length && <tr><td colSpan={11} className="empty">No team members yet.</td></tr>}
       </tbody></table></div>
       <div className="tiles">{D.clients.filter(c => c.isActive !== false && mineC(c)).map(c => {
-        const W = D.work.filter(w => w.cid === c.id && inP(w, P) && MAIN_T.includes(w.type)), f = isM ? 1 : 0.25;
+        const W = D.work.filter(w => w.cid === c.id && inP(w, P) && MAIN_T.includes(w.type)), f = tf;
         const tot = ["backlink", "blog", "gmb", "poster"].reduce((a, k) => a + Math.round((c.targets?.[k] || 0) * f), 0);
         const ex = Math.round(tot * el), p = ex ? pct(W.length, ex) : 100;
-        return <div key={c.id} className="tile"><div className="l">{c.name}</div><div className="v">{p}%</div><div className="s">{W.length} done · {ex} expected by today · {tot} for the {isM ? "month" : "week"}</div><div className={`bar ${p >= 100 ? "ok" : p < 70 ? "red" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, p)}%` }} /></div></div>;
+        return <div key={c.id} className="tile"><div className="l">{c.name}</div><div className="v">{p}%</div><div className="s">{W.length} done · {ex} expected by today · {tot} for the {isC ? "period" : isM ? "month" : "week"}</div><div className={`bar ${p >= 100 ? "ok" : p < 70 ? "red" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, p)}%` }} /></div></div>;
       })}</div>
     </article>
   );

@@ -203,3 +203,9 @@
 .ck-f { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid #EEF2F7; }
 .ck-f input, .ck-f select { height: 36px; border: 1px solid #E2E8F0; border-radius: 9px; padding: 0 10px; font: inherit; font-size: 13.5px; background: #fff; }
 .ck-f input { width: 240px; max-width: 100%; }
+
+/* PDF reports: all clients, custom dates */
+.seo-layout .rep-all { display: flex; flex-direction: column; gap: 18px; }
+.rp-cd { display: inline-flex; align-items: center; gap: 8px; }
+.rp-cd input { height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; font: inherit; background: #fff; }
+@media print { .seo-layout .rep-all > .rep + .rep { break-before: page; } }
