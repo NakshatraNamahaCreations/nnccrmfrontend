@@ -180,15 +180,17 @@ function WorkTable({ L, client, av, canDelete, onChanged }) {
 
 /* ───────── TODAY ───────── */
 function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel, load }) {
-  const C = active.filter(mineC), mo = monthOf(T(0));
+  const [day, setDay] = useState(T(0));
+  const isToday = day === T(0), dL = isToday ? "today" : `on ${fds(day)}`;
+  const C = active.filter(mineC), mo = [monthOf(day)[0], day];   // the month up to the day picked
   const [q, setQ] = useState(""), [show, setShow] = useState("all"), [page, setPage] = useState(0), [per, setPer] = useState(10);
   // the ads report is sent today for yesterday's numbers (Monday: for Saturday), so both days count
-  const repDays = [T(0), T(-1), ...(parse(T(0)).getDay() === 1 ? [T(-2)] : [])];
+  const repDays = [day, addD(day, -1), ...(parse(day).getDay() === 1 ? [addD(day, -2)] : [])];
   const repOf = (cid) => D.ads.filter(r => r.cid === cid && repDays.includes(r.date) && hasGoogle(r)).sort((a, b) => (a.sent === b.sent ? b.date.localeCompare(a.date) : a.sent ? -1 : 1))[0] || null;
   const adsC = C.filter(c => c.ads);
   const sent = adsC.filter(c => repOf(c.id)?.sent);
-  const todayW = D.work.filter(w => w.date === T(0) && (who === "all" || w.who === who));
-  const hr = new Date().getHours();
+  const todayW = D.work.filter(w => w.date === day && (who === "all" || w.who === who));
+  const hr = isToday ? new Date().getHours() : 24;   // a past day: anything not sent is late
   const rows = C.map(c => {
     const W = D.work.filter(w => w.cid === c.id);
     const bt = c.targets?.backlink || 0, gt = c.targets?.gmb || 0;   // monthly targets
@@ -202,15 +204,23 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
       adsDay: c.ads ? repOf(c.id) : null,
     };
   });
-  const dayOfMonth = parse(T(0)).getDate();
+  const dayOfMonth = parse(day).getDate();
   const member = (id) => D.team.find(t => t.id === id);
+  const byWho = (cid, type) => {
+    const g = {};
+    D.work.filter(w => w.cid === cid && w.type === type && inP(w, mo)).forEach(w => { const n = member(w.who)?.name?.split(" ")[0] || "Other"; g[n] = (g[n] || 0) + 1; });
+    return Object.entries(g).sort((x, y) => y[1] - x[1]).map(([n, c]) => `${n} ${c}`).join(" · ");
+  };
   const behind = (r) => r.bM < r.bt || r.gM < r.gt || r.blM < (r.c.targets?.blog || 0) || r.poM < (r.c.targets?.poster || 0);
   const F = rows.filter(r => (!q || r.c.name.toLowerCase().includes(q.toLowerCase()))
     && (show === "all" || (show === "ads" && r.c.ads && !r.adsDay?.sent) || (show === "behind" && behind(r)) || (show === "done" && !behind(r) && (!r.c.ads || r.adsDay?.sent))));
   const pages = Math.max(1, Math.ceil(F.length / per)), cur = Math.min(page, pages - 1);
   const shown = F.slice(cur * per, cur * per + per);
   // a target of 0: nothing expected, show the count without a colour
-  const Cell = ({ n, t }) => (t > 0 ? <Chk ok={n >= t} late={n < (t * dayOfMonth) / 30 - 1}>{n} of {t}</Chk> : <span className="sub">{n ? `${n} (no target)` : "-"}</span>);
+  const Cell = ({ n, t, by }) => (
+    <>{t > 0 ? <Chk ok={n >= t} late={n < (t * dayOfMonth) / 30 - 1}>{n} of {t}</Chk> : <span className="sub">{n ? `${n} (no target)` : "-"}</span>}
+      {by && <span className="sub ck-by">{by}</span>}</>
+  );
   // A message in the Employee Portal to whoever is behind on this client
   const remind = async (r) => {
     const todo = [];
@@ -232,16 +242,20 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
   };
   return (
     <>
-      <h2 className="t">Today<span>.</span></h2>
-      <p className="lead">{fdw(T(0))} · <b>{sent.length} of {adsC.length} Google Ads reports sent</b> · {todayW.length} work items logged today</p>
+      <div className="td-h">
+        <h2 className="t">{isToday ? "Today" : fdw(day)}<span>.</span></h2>
+        <label className="td-day">Day <input type="date" value={day} max={T(0)} onChange={e => e.target.value && setDay(e.target.value)} /></label>
+        {!isToday && <button type="button" className="btn sm" onClick={() => setDay(T(0))}>Back to today</button>}
+      </div>
+      <p className="lead">{fdw(day)} · <b>{sent.length} of {adsC.length} Google Ads reports sent</b> · {todayW.length} work items logged {dL}{!isToday ? ` · month counts are from ${fds(mo[0])} to ${fds(day)}` : ""}</p>
       <div className="kpis">
-        <div className="kpi"><span className="l">Ads reports to clients today</span><span className={`v ${sent.length < adsC.length && hr >= 18 ? "red" : sent.length < adsC.length ? "amb" : "ok"}`}>{sent.length} / {adsC.length}</span><span className="s">Send by 7 pm every working day</span></div>
+        <div className="kpi"><span className="l">Ads reports to clients {dL}</span><span className={`v ${sent.length < adsC.length && hr >= 18 ? "red" : sent.length < adsC.length ? "amb" : "ok"}`}>{sent.length} / {adsC.length}</span><span className="s">Send by 7 pm every working day</span></div>
         <div className="kpi"><span className="l">Backlinks this month</span><span className="v">{rows.reduce((a, r) => a + r.bM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.bt, 0)} across clients</span></div>
         <div className="kpi"><span className="l">GMB posts this month</span><span className="v">{rows.reduce((a, r) => a + r.gM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.gt, 0)}</span></div>
         <div className="kpi"><span className="l">Blogs this month</span><span className="v">{rows.reduce((a, r) => a + r.blM, 0)}</span><span className="s">Target {C.reduce((a, c) => a + (c.targets?.blog || 0), 0)}</span></div>
         <div className="kpi"><span className="l">Ad spend this month</span><span className="v">{inr(rows.reduce((a, r) => a + (r.m ? r.m.spend : 0), 0))}</span><span className="s">{rows.reduce((a, r) => a + (r.m ? r.m.conv : 0), 0)} leads so far</span></div>
       </div>
-      <div className="card"><h3>Client checklist for today <small>green done · grey pending · red overdue</small></h3>
+      <div className="card"><h3>Client checklist {isToday ? "for today" : `for ${fds(day)}`} <small>green done · grey pending · red overdue</small></h3>
         <div className="ck-f">
           <input type="search" placeholder="Search client" value={q} onChange={e => { setQ(e.target.value); setPage(0); }} aria-label="Search client" />
           <select value={show} onChange={e => { setShow(e.target.value); setPage(0); }} aria-label="Show">
@@ -258,14 +272,14 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
               <td><button type="button" className="link" onClick={() => { setSel(s => ({ ...s, rc: r.c.id })); setTab("reports"); }}>{r.c.name}</button><span className="sub">{r.c.site}</span></td>
               <td><span className="who">{r.c.members.map(id => av(id))}</span></td>
               <td>{r.c.ads
-                ? r.adsDay?.sent ? <Chk ok>Sent{r.adsDay.date !== T(0) ? ` (${fds(r.adsDay.date)})` : ""}</Chk>
-                  : r.adsDay ? <button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>
+                ? r.adsDay?.sent ? <><Chk ok>Sent{r.adsDay.date !== day ? ` (${fds(r.adsDay.date)})` : ""}</Chk>{member(r.adsDay.who) && <span className="sub ck-by">by {member(r.adsDay.who).name.split(" ")[0]}</span>}</>
+                  : r.adsDay ? <><button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>{member(r.adsDay.who) && <span className="sub ck-by">by {member(r.adsDay.who).name.split(" ")[0]}</span>}</>
                     : <span className={`pill ${hr >= 18 ? "p-red" : "p-grey"}`}>{hr >= 18 ? "Late" : "Not sent yet"}{member(r.c.ads) ? ` · ${member(r.c.ads).name.split(" ")[0]}` : ""}</span>
                 : <span className="sub">No ads</span>}</td>
-              <td><Cell n={r.bM} t={r.bt} /></td>
-              <td><Cell n={r.gM} t={r.gt} /></td>
-              <td><Cell n={r.blM} t={r.c.targets?.blog || 0} /></td>
-              <td><Cell n={r.poM} t={r.c.targets?.poster || 0} /></td>
+              <td><Cell n={r.bM} t={r.bt} by={byWho(r.c.id, "backlink")} /></td>
+              <td><Cell n={r.gM} t={r.gt} by={byWho(r.c.id, "gmb")} /></td>
+              <td><Cell n={r.blM} t={r.c.targets?.blog || 0} by={byWho(r.c.id, "blog")} /></td>
+              <td><Cell n={r.poM} t={r.c.targets?.poster || 0} by={byWho(r.c.id, "poster")} /></td>
               <td style={{ minWidth: 150 }}>{r.m && r.c.budget ? (
                 <><span className="ub"><span className={`bar ${pct(r.m.spend, r.c.budget) > pct(dayOfMonth, 30) + 12 ? "red" : ""}`}><i style={{ width: `${Math.min(100, pct(r.m.spend, r.c.budget))}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{pct(r.m.spend, r.c.budget)}%</span></span>
                   <span className="sub">{inr(r.m.spend)} of {inr(r.c.budget)}</span></>
@@ -277,7 +291,7 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
         </tbody></table></div>
         {F.length > 10 && <Pager total={F.length} page={cur} per={per} onPage={setPage} onPer={setPer} sizes={[10, 25, 50]} label="clients" top />}
       </div>
-      <div className="card"><h3>Logged today <small>{todayW.length} items</small><button type="button" className="btn sm" onClick={() => setTab("work")}>Full work log</button></h3>
+      <div className="card"><h3>Logged {dL} <small>{todayW.length} items</small><button type="button" className="btn sm" onClick={() => setTab("work")}>Full work log</button></h3>
         <WorkTable L={todayW.slice(0, 15)} client={client} av={av} onChanged={load} />
       </div>
     </>
@@ -673,12 +687,16 @@ function ClientReport({ D, c, P, rp, person, rid = "seo-rep" }) {
   const f = isC ? (Math.round((parse(P[1]) - parse(P[0])) / 864e5) + 1) / 30 : isAll ? Math.max(1, Math.round((parse(P[1]) - parse(P[0])) / 864e5) / 30) : isM ? 1 : 0.25;
   const cnt = (k) => W.filter(w => w.type === k).length;
   const tgt = (k) => Math.round((c.targets?.[k] || 0) * f);
+  const pName = (id) => person(id)?.name || "Former member";
+  const byP = (L) => { const g = {}; L.forEach(w => { const n = pName(w.who); g[n] = (g[n] || 0) + 1; }); return Object.entries(g).sort((x, y) => y[1] - x[1]); };
+  const doneBy = byP(W);
   const elapsed = P[1] > T(0) ? workdaysIn([P[0], T(0)]) / Math.max(1, workdaysIn(P)) : 1;
   const exp = (k) => Math.round(tgt(k) * elapsed);
   const Tile = ({ k, l }) => (
     <div className="tile"><div className="l">{l}</div><div className="v">{cnt(k)}</div>
       <div className="s">Target {tgt(k)}{elapsed < 1 ? ` · expected by today ${exp(k)}${cnt(k) >= exp(k) ? " (on track)" : " (behind)"}` : ` · ${pct(cnt(k), tgt(k))}%`}</div>
-      <div className={`bar ${cnt(k) >= tgt(k) ? "ok" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, pct(cnt(k), tgt(k)))}%` }} /></div></div>
+      <div className={`bar ${cnt(k) >= tgt(k) ? "ok" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, pct(cnt(k), tgt(k)))}%` }} /></div>
+      {cnt(k) > 0 && <div className="s" style={{ marginTop: 4 }}>By {byP(W.filter(w => w.type === k)).map(([n, x]) => `${n} ${x}`).join(", ")}</div>}</div>
   );
   const List = ({ k }) => {
     const L = W.filter(w => w.type === k).sort((a, b) => b.date.localeCompare(a.date));
@@ -686,7 +704,7 @@ function ClientReport({ D, c, P, rp, person, rid = "seo-rep" }) {
     return (
       <div className="ll">
         {L.map(w => (
-          <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.kw ? ` · ${w.kw}` : ""}{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span>{w.da ? <span className="pill p-grey">DA {w.da}</span> : null}</div>
+          <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.kw ? ` · ${w.kw}` : ""}<span className="note"> · {pName(w.who)}</span>{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span>{w.da ? <span className="pill p-grey">DA {w.da}</span> : null}</div>
         ))}
       </div>
     );
@@ -717,7 +735,9 @@ function ClientReport({ D, c, P, rp, person, rid = "seo-rep" }) {
       <div className="rh">
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}><Logo src={D.logo} size={52} /><div><h2>{c.name}<span>.</span></h2><p>{title} · {fd(P[0])} to {fd(P[1])}</p></div></div>
         <div style={{ textAlign: "right" }}><p style={{ margin: 0, fontSize: 13, color: "var(--navy)", fontWeight: 600 }}>{c.site}</p>
-          <p className="note" style={{ margin: 0 }}>{c.seo ? `SEO: ${person(c.seo)?.name || ""}` : ""}{c.ads ? ` · Ads: ${person(c.ads)?.name || ""}` : ""}</p></div>
+          <p className="note" style={{ margin: 0 }}>{c.seo ? `SEO: ${person(c.seo)?.name || ""}` : ""}{c.ads ? ` · Ads: ${person(c.ads)?.name || ""}` : ""}</p>
+          {doneBy.length > 0 && <p className="note" style={{ margin: 0 }}>Work done by {doneBy.map(([n, x]) => `${n} (${x})`).join(", ")}</p>}
+          {A.length > 0 && <p className="note" style={{ margin: 0 }}>Ads reports by {[...new Set(A.map(r => pName(r.who)))].join(", ")}</p>}</div>
       </div>
       <div className="pb"><h4>Work done</h4><div className="tiles"><Tile k="backlink" l="Backlinks built" /><Tile k="blog" l="Blogs published" /><Tile k="gmb" l="GMB posts" /><Tile k="poster" l="Posters designed" /></div></div>
       {krows.length > 0 && (

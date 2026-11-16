@@ -209,3 +209,10 @@
 .rp-cd { display: inline-flex; align-items: center; gap: 8px; }
 .rp-cd input { height: 40px; border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; font: inherit; background: #fff; }
 @media print { .seo-layout .rep-all > .rep + .rep { break-before: page; } }
+
+/* Today: pick a day, and who did the work */
+.td-h { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.td-h h2.t { margin-right: 6px; }
+.td-day { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.td-day input { height: 36px; border: 1px solid var(--line); border-radius: 9px; padding: 0 10px; font: inherit; background: #fff; color: var(--navy); }
+.ck-by { display: block; margin-top: 3px; font-size: 11.5px; }

@@ -248,3 +248,5 @@
 .ep tr.ep-new-row td { background: #F5F8FF; }
 .ep .ep-new { border-color: #BFD3FE; }
 .ep .ep-new h3 { color: #1D4ED8; }
+
+.ep .ep-plan li .when { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; white-space: nowrap; font-size: 11.5px; }

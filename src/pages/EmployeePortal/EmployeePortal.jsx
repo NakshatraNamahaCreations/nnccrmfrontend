@@ -182,6 +182,7 @@ export default function EmployeePortal() {
 
 // "New": sent since this tab was last opened
 const istDay = (d) => new Date(new Date(d).getTime() + 330 * 60000).toISOString().slice(0, 10);
+const loggedAt = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" });
 const isNew = (since, at) => !!since && !!at && new Date(at) > new Date(since);
 const NewPill = () => <span className="pill p-new">New</span>;
 
@@ -450,7 +451,7 @@ const tm = (d) => new Date(d).toLocaleTimeString("en-IN", { hour: "numeric", min
 function attTxt(L) {
   const open = L.find(x => !x.out), last = [...L].reverse().find(x => x.out);
   const m = L.reduce((a, x) => a + ((x.out ? new Date(x.out) : new Date()) - new Date(x.in)) / 60000, 0);
-  return `In ${tm(L[0].in)}${open ? " · still in" : last ? ` · Out ${tm(last.out)}` : ""} · ${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, "0")}m${L.length > 1 ? ` (${L.length} sessions)` : ""}`;
+  return `In ${tm(L[0].in)}${open ? " · still in" : last ? ` · Out ${tm(last.out)}` : ""} · ${Math.floor(Math.round(m) / 60)}h ${String(Math.round(m) % 60).padStart(2, "0")}m${L.length > 1 ? ` (${L.length} sessions)` : ""}`;
 }
 
 function Work({ accounts, today, since }) {
@@ -478,7 +479,8 @@ function Work({ accounts, today, since }) {
     const L = work.filter(w => String(w.account) === a.id);
     const day = days.find(x => String(x.account) === a.id && x.date === ref);
     const att = (d.attendance || []).find(x => String(x.account) === a.id && x.date === ref);
-    return { a, hrs: L.reduce((s, w) => s + (w.hrs || 0), 0), extra: L.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0), n: L.length, sub: days.filter(x => String(x.account) === a.id).length, day, att };
+    const lastAt = L.reduce((m, w) => (w.createdAt && (!m || w.createdAt > m) ? w.createdAt : m), "");
+    return { a, lastAt, hrs: L.reduce((s, w) => s + (w.hrs || 0), 0), extra: L.filter(w => w.meta?.extra).reduce((s, w) => s + (w.hrs || 0), 0), n: L.length, sub: days.filter(x => String(x.account) === a.id).length, day, att };
   }).sort((x, y) => y.hrs - x.hrs);
   const resolve = async (id) => { try { await papi(`/blockers/${id}/resolve`, { method: "PUT" }); toast.success("Marked as sorted"); W.reload(); } catch (ex) { toast.error(ex.message); } };
   const tw = work.filter(w => w.date === ref);
@@ -501,7 +503,7 @@ function Work({ accounts, today, since }) {
   };
 
   if (person && acc(person)) return (
-    <PersonWork a={acc(person)} work={d.work.filter(w => String(w.account) === person)} loading={W.loading}
+    <PersonWork a={acc(person)} work={d.work.filter(w => String(w.account) === person)} loading={W.loading} since={since}
       period={period} onClose={() => setPerson(null)}
       range={(
         <div className="pp-range">
@@ -549,19 +551,6 @@ function Work({ accounts, today, since }) {
               <button type="button" className="btn sm" onClick={() => resolve(b._id)}>Sorted</button></div>
           ))}</div></div>
       )}
-      {!today && fresh.length > 0 && (
-        <div className="card ep-new"><h3>New since you last opened the Work log <small>{fresh.length} item{fresh.length === 1 ? "" : "s"}</small></h3>
-          <div className="ll flat">{fresh.map(e => (
-            <div key={e._id}>
-              <span className="d">{fd(e.date)}</span>
-              <span className="x"><NewPill /> <span className="pill p-other">{TY[e.type] || e.type}</span> <b>{e.title}</b>
-                <span className="sub">{[acc(e.account)?.name, e.refName, metaTxt(e), e.date !== istDay(e.createdAt) ? `sent ${fd(istDay(e.createdAt))}, for ${fd(e.date)}` : ""].filter(Boolean).join(" · ")}</span>
-                {e.url && <a className="url" href={e.url} target="_blank" rel="noopener noreferrer">{e.url.replace(/^https?:\/\//, "")}</a>}</span>
-              <span className="num">{h1(e.hrs)} h</span>
-            </div>
-          ))}</div>
-        </div>
-      )}
       {today ? (
       <div className="ep-grid">
         <div className="card"><h3>{today ? "Logged today" : "Work logged"} <small>{work.length} items · {h1(work.reduce((s, w) => s + (w.hrs || 0), 0))} h</small></h3>
@@ -596,11 +585,11 @@ function Work({ accounts, today, since }) {
         <div className="card"><h3>People <small>{rg === "custom" ? period : period.toLowerCase()} · click a person to see all their work</small></h3>
           {W.loading ? <div className="empty">Loading…</div> : per.length ? (
             <div className="tw"><table className="ep-people">
-              <thead><tr><th>Employee</th><th>Check in {refL}</th><th>Check out {refL}</th><th className="n">Items</th><th className="n">Days submitted</th><th className="n">Hours</th><th>{ref === T(0) ? "Today" : `Day ${fd(ref)}`}</th><th /></tr></thead>
+              <thead><tr><th>Employee</th><th>Check in {refL}</th><th>Check out {refL}</th><th className="n">Items</th><th className="n">Days submitted</th><th className="n">Hours</th><th>Last update</th><th>{ref === T(0) ? "Today" : `Day ${fd(ref)}`}</th><th /></tr></thead>
               <tbody>{per.filter(p => !who || p.a.id === who).map(p => {
                 const S = p.att?.sessions || [], open = S.find(x => !x.out), last = [...S].reverse().find(x => x.out);
                 return (
-                  <tr key={p.a.id} onClick={() => setPerson(p.a.id)}>
+                  <tr key={p.a.id} className={newOf(p.a.id) ? "ep-new-row" : ""} onClick={() => setPerson(p.a.id)}>
                     <td><div className="ep-who"><Av name={p.a.name} role={p.a.role} /><span><b>{p.a.name}</b>{newOf(p.a.id) > 0 && <> <span className="pill p-new">{newOf(p.a.id)} new</span></>}<span className="sub">{roleNames(p.a)}</span></span></div></td>
                     <td>{S.length ? <b>{tm(S[0].in)}</b> : <span className="sub">Not checked in</span>}</td>
                     <td>{open ? <span className="pill p-ok">Still in</span> : last ? <b>{tm(last.out)}</b> : <span className="sub">-</span>}
@@ -608,6 +597,7 @@ function Work({ accounts, today, since }) {
                     <td className="n">{p.n}</td>
                     <td className="n">{p.sub}</td>
                     <td className="n"><b>{h1(p.hrs)} h</b>{p.extra > 0 && <span className="sub">{h1(p.extra)} h extra</span>}</td>
+                    <td className="nw">{p.lastAt ? <><b>{loggedAt(p.lastAt)}</b>{istDay(p.lastAt) !== T(0) && <span className="sub">{fd(istDay(p.lastAt))}</span>}</> : <span className="sub">-</span>}</td>
                     <td>{p.day ? <span className="pill p-ok">Sent {ampm(p.day.at)}</span> : ref === T(0) ? <span className="pill p-amb">Open</span> : <span className="pill p-red">Not submitted</span>}</td>
                     <td className="r"><button type="button" className="btn sm" onClick={(e) => { e.stopPropagation(); setPerson(p.a.id); }}>View <ChevronRight size={14} /></button></td>
                   </tr>
@@ -628,7 +618,7 @@ const BUG_ST = { open: ["Open", "p-red"], reopened: ["Reopened", "p-red"], progr
 const bugDone = (s) => ["fixed", "verified", "notbug"].includes(s);
 const TASK_ST = { todo: ["To do", "p-amb"], doing: ["Doing", "p-blue"], done: ["Done", "p-ok"] };
 const NOP = "Other work (no project)";
-function PersonWork({ a, work, loading, period, onClose, range }) {
+function PersonWork({ a, work, loading, period, onClose, range, since }) {
   const O = useGet(a ? `/accounts/${a.id}/overview` : "");
   const PJ = useGet(a ? `/accounts/${a.id}/projects` : "");   // the projects or clients they are on
   const [open, setOpen] = useState(""), [view, setView] = useState("work");
@@ -715,9 +705,10 @@ function PersonWork({ a, work, loading, period, onClose, range }) {
                         ))}
                       </div>
                       {view === "work" && (p.W.length ? (
-                        <table className="pl-t"><thead><tr><th>Date</th><th>Work type</th><th>What was done</th><th>Link</th><th className="n">Hours</th></tr></thead>
-                          <tbody>{[...p.W].sort((x, y) => (x.date < y.date ? 1 : -1)).map(e => (
-                            <tr key={e._id}><td className="nw">{fdw(e.date)}</td><td><span className="pill p-other">{TY[e.type] || e.type}</span></td>
+                        <table className="pl-t"><thead><tr><th>Date</th><th>Logged at</th><th>Work type</th><th>What was done</th><th>Link</th><th className="n">Hours</th></tr></thead>
+                          <tbody>{[...p.W].sort((x, y) => (x.date === y.date ? String(y.createdAt).localeCompare(String(x.createdAt)) : x.date < y.date ? 1 : -1)).map(e => (
+                            <tr key={e._id} className={isNew(since, e.createdAt) ? "ep-new-row" : ""}><td className="nw">{fdw(e.date)}</td>
+                              <td className="nw">{e.createdAt ? <>{isNew(since, e.createdAt) && <><NewPill /> </>}{loggedAt(e.createdAt)}{istDay(e.createdAt) !== e.date && <span className="sub">on {fd(istDay(e.createdAt))}</span>}</> : "-"}</td><td><span className="pill p-other">{TY[e.type] || e.type}</span></td>
                               <td>{e.title}{metaTxt(e) && <span className="sub">{metaTxt(e)}</span>}</td>
                               <td className="nw">{e.url ? <a className="url" href={e.url} target="_blank" rel="noopener noreferrer" title={e.url}>Open</a> : null}<WorkFiles e={e} />{!e.url && !e.meta?.files?.length && "-"}</td>
                               <td className="n">{h1(e.hrs)} h</td></tr>
@@ -876,11 +867,11 @@ function Plans({ accounts, since }) {
                         <li key={i._id} className={i.done ? "done" : ""}>
                           {i.done ? <CheckCircle2 size={16} color="#16a34a" /> : <Circle size={16} color="#94a3b8" />}
                           <span className="t"><Linkify text={i.text} />{i.refName && <span className="sub">{i.refName}</span>}</span>
-                          {i.done && i.doneAt && <span className="sub when">{tm(i.doneAt)}</span>}
+                          <span className="sub when">{i.at && <span title="When it was added">Added {tm(i.at)}</span>}{i.done && i.doneAt && <span title="When it was ticked done">Done {tm(i.doneAt)}</span>}</span>
                         </li>
                       ))}
                     </ul>
-                    <p className="sub ep-plan-f">Last change {tm(p.updatedAt)}</p>
+                    <p className="sub ep-plan-f">{p.createdAt ? `Sent ${tm(p.createdAt)} · ` : ""}Last change {tm(p.updatedAt)}</p>
                   </section>
                 );
               })}
