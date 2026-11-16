@@ -10,30 +10,31 @@ import "./Settings.css";
 const API   = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const BRANCHES    = ["Mysore","Bangalore","Mumbai"];
+// the same modules as the sidebar, in the same order
 const ALL_MODULES = [
-  "dashboard","todays-plan","pipeline","all-leads","enquiries","calendar",
-  "documents","analytics","leaderboard","branch-reports","payment-tracker",
-  "expense-tracker","pnl","funds","accounting","attendance","settings",
+  "dashboard","all-leads","calendar","quotations","integrations","employee-portal","seo-team",
+  "analytics","leaderboard","branch-reports","payment-tracker","expense-tracker","pnl","accounting","settings",
+  "attendance","credentials-vault",
 ];
 
 const MODULE_LABELS = {
-  "dashboard":       "Dashboard",
-  "todays-plan":     "Today's Plan",
-  "pipeline":        "Pipeline",
-  "all-leads":       "All Leads",
-  "enquiries":       "Enquiries",
-  "calendar":        "Calendar",
-  "documents":       "Documents",
-  "analytics":       "Analytics / BI",
-  "leaderboard":     "Leaderboard",
-  "branch-reports":  "Branch Reports",
-  "payment-tracker": "Payment Tracker",
-  "expense-tracker": "Expense Tracker",
-  "pnl":             "P&L Report",
-  "funds":           "Reserve Funds",
-  "accounting":      "Accounting",
-  "attendance":      "Attendance & Salary",
-  "settings":        "Settings",
+  "dashboard":         "Dashboard",
+  "all-leads":         "All Leads, Projects, Monthly & Extras",
+  "calendar":          "Calendar",
+  "quotations":        "Quotations",
+  "integrations":      "Credential Vault",
+  "employee-portal":   "Employee Portal",
+  "seo-team":          "SEO & Ads Team",
+  "analytics":         "Analytics",
+  "leaderboard":       "Leaderboard",
+  "branch-reports":    "Branch Reports",
+  "payment-tracker":   "Payment Tracker",
+  "expense-tracker":   "Expense Tracker",
+  "pnl":               "P&L Report",
+  "accounting":        "Accounting",
+  "settings":          "Settings",
+  "attendance":        "Attendance & Salary",
+  "credentials-vault": "NNC Credentials",
 };
 
 /* Permission helpers — encode as "module:level" strings in modules[] array */
@@ -438,67 +439,119 @@ function UserModal({ modal, onClose, onSave }) {
 // TAB 3 — Branch & Rent Config
 // ══════════════════════════════════════════════════════════════════════════════
 function BranchTab({ toast }) {
-  const [rents,   setRents]   = useState({});
+  const [list,    setList]    = useState([]);    // offices: { branch, amount, dueDay, notes }
   const [loading, setLoading] = useState(true);
   const [saving,  setSaving]  = useState(false);
+  const [names,   setNames]   = useState({});    // office being renamed → new name
+  const [adding,  setAdding]  = useState(null);  // the new office form
 
-  useEffect(() => {
-    api("GET","/api/expenses/rent-config").then(j => {
-      if (j.success) {
-        const map = {};
-        (j.data || []).forEach(r => { map[r.branch] = r; });
-        // ensure all branches exist
-        BRANCHES.forEach(b => { if (!map[b]) map[b] = { branch:b, amount:0, dueDay:1, notes:"" }; });
-        setRents(map);
-      }
-    }).finally(() => setLoading(false));
+  const load = useCallback(() => {
+    api("GET","/api/expenses/rent-config").then(j => { if (j.success) setList(j.data || []); }).finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
-  const set = (branch, field, val) => setRents(p => ({ ...p, [branch]: { ...p[branch], [field]: val } }));
+  const set = (branch, field, val) => setList(L => L.map(r => r.branch === branch ? { ...r, [field]: val } : r));
 
-  const save = async (branch) => {
-    setSaving(branch);
+  const save = async (r) => {
+    const name = names[r.branch] !== undefined ? names[r.branch].trim() : r.branch;
+    if (!name) return toast("error", "Office name is required");
+    setSaving(r.branch);
     try {
-      const j = await api("PUT", `/api/expenses/rent-config/${branch}`, rents[branch]);
+      const j = await api("PUT", `/api/expenses/rent-config/${encodeURIComponent(r.branch)}`, { amount: r.amount, dueDay: r.dueDay, notes: r.notes, name });
       if (!j.success) throw new Error(j.message);
-      toast("success", `${branch} rent config saved`);
+      toast("success", `${name} saved`);
+      setNames(n => { const x = { ...n }; delete x[r.branch]; return x; });
+      load();
+    } catch(e) { toast("error", e.message || "Failed"); }
+    finally { setSaving(false); }
+  };
+  const remove = async (r) => {
+    if (!window.confirm(`Delete ${r.branch}? Its rent stops showing in the Expense Tracker. Rent already paid stays in the records.`)) return;
+    try {
+      const j = await api("DELETE", `/api/expenses/rent-config/${encodeURIComponent(r.branch)}`);
+      if (!j.success) throw new Error(j.message);
+      toast("success", `${r.branch} deleted`);
+      load();
+    } catch(e) { toast("error", e.message || "Failed"); }
+  };
+  const add = async () => {
+    if (!adding.name.trim()) return toast("error", "Office name is required");
+    setSaving("__new");
+    try {
+      const j = await api("POST", "/api/expenses/rent-config", adding);
+      if (!j.success) throw new Error(j.message);
+      toast("success", `${adding.name.trim()} added`);
+      setAdding(null); load();
     } catch(e) { toast("error", e.message || "Failed"); }
     finally { setSaving(false); }
   };
 
   if (loading) return <div className="st-loading"><RefreshCcw size={18} className="st-spin"/> Loading…</div>;
 
+  const Fields = ({ r, on }) => (
+    <>
+      <Field label="Monthly Rent (₹)">
+        <Input type="number" min="0" value={r.amount||""} placeholder="0" onChange={e=>on("amount",Number(e.target.value))}/>
+      </Field>
+      <Field label="Due Day of Month">
+        <Select value={r.dueDay||1} onChange={e=>on("dueDay",Number(e.target.value))}>
+          {Array.from({length:28},(_,i)=>i+1).map(d=><option key={d} value={d}>{d}</option>)}
+        </Select>
+      </Field>
+      <Field label="Notes (optional)">
+        <Input value={r.notes||""} placeholder="e.g. Co-working space" onChange={e=>on("notes",e.target.value)}/>
+      </Field>
+    </>
+  );
+
   return (
     <div className="st-tab-body">
-      <Section title="Branch Rent Configuration" sub="Set monthly rent amount and due date for each office">
+      <Section title="Branch Rent Configuration" sub="Set monthly rent amount and due date for each office. Add an office, rename it with Edit, or delete it.">
+        <div className="st-branch-bar">
+          <button className="st-btn-primary" onClick={()=>setAdding({ name:"", amount:0, dueDay:1, notes:"" })} disabled={!!adding}><Plus size={14}/> Add office</button>
+        </div>
         <div className="st-branch-grid">
-          {BRANCHES.map(branch => {
-            const r = rents[branch] || {};
+          {list.map(r => {
+            const renaming = names[r.branch] !== undefined;
             return (
-              <div key={branch} className="st-branch-card">
+              <div key={r.branch} className="st-branch-card">
                 <div className="st-branch-card-head">
-                  <Building2 size={16}/> <strong>{branch}</strong>
+                  <Building2 size={16}/>
+                  {renaming
+                    ? <input className="st-input st-branch-name" autoFocus value={names[r.branch]} onChange={e=>setNames(n=>({ ...n, [r.branch]: e.target.value }))} aria-label="Office name"/>
+                    : <strong>{r.branch}</strong>}
+                  <span style={{ flex: 1 }}/>
+                  {renaming
+                    ? <button type="button" className="st-icon-btn" title="Cancel rename" onClick={()=>setNames(n=>{ const x = { ...n }; delete x[r.branch]; return x; })}><X size={14}/></button>
+                    : <button type="button" className="st-icon-btn" title="Edit name" onClick={()=>setNames(n=>({ ...n, [r.branch]: r.branch }))}><Edit3 size={14}/></button>}
+                  <button type="button" className="st-icon-btn danger" title={`Delete ${r.branch}`} onClick={()=>remove(r)}><Trash2 size={14}/></button>
                 </div>
                 <div className="st-form-col">
-                  <Field label="Monthly Rent (₹)">
-                    <Input type="number" min="0" value={r.amount||""} placeholder="0" onChange={e=>set(branch,"amount",Number(e.target.value))}/>
-                  </Field>
-                  <Field label="Due Day of Month">
-                    <Select value={r.dueDay||1} onChange={e=>set(branch,"dueDay",Number(e.target.value))}>
-                      {Array.from({length:28},(_,i)=>i+1).map(d=><option key={d} value={d}>{d}</option>)}
-                    </Select>
-                  </Field>
-                  <Field label="Notes (optional)">
-                    <Input value={r.notes||""} placeholder="e.g. Co-working space" onChange={e=>set(branch,"notes",e.target.value)}/>
-                  </Field>
-                  <button className="st-btn-primary" onClick={()=>save(branch)} disabled={saving===branch}>
-                    {saving===branch?<RefreshCcw size={14} className="st-spin"/>:<Save size={14}/>}
-                    {saving===branch?"Saving…":"Save"}
+                  {Fields({ r, on: (k, v) => set(r.branch, k, v) })}
+                  <button className="st-btn-primary" onClick={()=>save(r)} disabled={saving===r.branch}>
+                    {saving===r.branch?<RefreshCcw size={14} className="st-spin"/>:<Save size={14}/>}
+                    {saving===r.branch?"Saving…":"Save"}
                   </button>
                 </div>
               </div>
             );
           })}
+          {adding && (
+            <div className="st-branch-card st-branch-new">
+              <div className="st-branch-card-head">
+                <Building2 size={16}/>
+                <input className="st-input st-branch-name" autoFocus placeholder="Office name, e.g. Chennai" value={adding.name} onChange={e=>setAdding(a=>({ ...a, name: e.target.value }))} aria-label="Office name"/>
+              </div>
+              <div className="st-form-col">
+                {Fields({ r: adding, on: (k, v) => setAdding(a => ({ ...a, [k]: v })) })}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="st-btn-primary" onClick={add} disabled={saving==="__new"}>{saving==="__new"?<RefreshCcw size={14} className="st-spin"/>:<Plus size={14}/>} Add</button>
+                  <button type="button" className="st-btn-ghost" onClick={()=>setAdding(null)}>Cancel</button>
+                </div>
+              </div>
+            </div>
+          )}
+          {!list.length && !adding && <div className="st-empty">No offices yet. Click "Add office".</div>}
         </div>
       </Section>
     </div>

@@ -149,8 +149,6 @@ export default function Sidebar() {
         { label: "Payment Tracker", path: "/payment-tracker",moduleKey: "payment-tracker",icon: <CreditCard size={15} /> },
         { label: "Expense Tracker", path: "/expense-tracker",moduleKey: "expense-tracker",icon: <Wallet size={15} /> },
         { label: "P&L Report",      path: "/pnl",            moduleKey: "pnl",            icon: <TrendingUp size={15} /> },
-        { label: "GST Report",      path: "/gst-report",     moduleKey: "gst-report",     icon: <ReceiptText size={15} /> },
-        { label: "Reserve Funds",   path: "/funds",          moduleKey: "funds",          icon: <PiggyBank size={15} /> },
         { label: "Accounting",      path: "/accounting",     moduleKey: "accounting",     icon: <BookOpen size={15} /> },
         { label: "Settings",        path: "/settings",       moduleKey: "settings",       icon: <Settings size={15} /> },
       ],

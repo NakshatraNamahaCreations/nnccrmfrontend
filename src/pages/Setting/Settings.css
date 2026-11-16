@@ -369,3 +369,14 @@
 .st-dev-pick-item:hover { background: #f8fafc; }
 .st-dev-pick-item.checked { background: #eff6ff; }
 .st-dev-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Branch & Rent: add, rename, delete offices */
+.st-branch-bar { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.st-branch-bar .st-btn-primary { width: auto; }
+.st-branch-name { height: 34px; padding: 0 10px; font-size: 14px; flex: 1; min-width: 0; }
+.st-icon-btn { border: 1px solid #E2E8F0; background: #fff; color: #475569; border-radius: 8px; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
+.st-icon-btn:hover { background: #F1F5F9; color: #0F172A; }
+.st-icon-btn.danger:hover { background: #FEF2F2; color: #DC2626; border-color: #FECACA; }
+.st-branch-new { border-style: dashed; border-color: #93C5FD; }
+.st-btn-ghost { border: 1px solid #D0D5DD; background: #fff; color: #344054; border-radius: 8px; padding: 0 16px; height: 40px; cursor: pointer; font: inherit; font-size: 14px; }
+.st-empty { color: #64748B; padding: 20px; }

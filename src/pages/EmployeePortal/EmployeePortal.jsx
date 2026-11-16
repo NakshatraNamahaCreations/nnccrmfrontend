@@ -455,7 +455,7 @@ function attTxt(L) {
 }
 
 function Work({ accounts, today, since }) {
-  const [rg, setRg] = useState(today ? "today" : "week");
+  const [rg, setRg] = useState("today");   // opens on today
   const [cf, setCf] = useState(T(-6)), [ct, setCt] = useState(T(0));   // custom dates
   const [team, setTeam] = useState("all");
   const [who, setWho] = useState("");
