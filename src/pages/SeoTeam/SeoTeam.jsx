@@ -728,12 +728,15 @@ function ClientReport({ D, c, P, rp, person, rid = "seo-rep" }) {
       {cnt(k) > 0 && <div className="s" style={{ marginTop: 4 }}>By {byP(W.filter(w => w.type === k)).map(([n, x]) => `${n} ${x}`).join(", ")}</div>}</div>
   );
   const List = ({ k }) => {
-    const L = W.filter(w => w.type === k).sort((a, b) => b.date.localeCompare(a.date));
+    // a sheet link holding several backlinks is saved as one copy per backlink: list it once, with the count
+    const G = new Map();
+    W.filter(w => w.type === k).forEach(w => { const key = [w.date, w.url || w.id, w.title, w.who].join("|"); const g = G.get(key); if (g) g.n++; else G.set(key, { ...w, n: 1 }); });
+    const L = [...G.values()].sort((a, b) => b.date.localeCompare(a.date));
     if (!L.length) return <p className="note">None in this period.</p>;
     return (
       <div className="ll">
         {L.map(w => (
-          <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.kw ? ` · ${w.kw}` : ""}<span className="note"> · {pName(w.who)}</span>{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span>{w.da ? <span className="pill p-grey">DA {w.da}</span> : null}</div>
+          <div key={w.id}><span className="d">{fds(w.date)}</span><span className="x"><b style={{ fontWeight: 500 }}>{w.title}</b>{w.n > 1 ? <b> · {w.n} {k === "backlink" ? "backlinks" : "items"}</b> : ""}{w.kw ? ` · ${w.kw}` : ""}<span className="note"> · {pName(w.who)}</span>{w.url && <><br /><a href={w.url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12 }}>{w.url}</a></>}</span>{w.da ? <span className="pill p-grey">DA {w.da}</span> : null}</div>
         ))}
       </div>
     );
