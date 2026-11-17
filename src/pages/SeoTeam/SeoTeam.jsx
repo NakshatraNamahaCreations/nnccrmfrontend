@@ -180,23 +180,41 @@ function WorkTable({ L, client, av, canDelete, onChanged }) {
 
 /* ───────── TODAY ───────── */
 function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel, load }) {
-  const [day, setDay] = useState(T(0));
-  const isToday = day === T(0), dL = isToday ? "today" : `on ${fds(day)}`;
-  const C = active.filter(mineC), mo = [monthOf(day)[0], day];   // the month up to the day picked
+  // period: today / yesterday (month so far, that day's ads report), a week, a month, or custom dates
+  const [rg, setRg] = useState("today");
+  const [cf, setCf] = useState(monthOf(T(0))[0]), [ct, setCt] = useState(T(0));
+  const one = rg === "today" || rg === "yday";
+  const day = rg === "today" ? T(0) : rg === "yday" ? T(-1) : null;
+  const P = one ? [monthOf(day)[0], day]
+    : rg === "custom" ? (cf <= ct ? [cf, ct] : [ct, cf])
+      : period(rg);
+  const end = one ? day : (P[1] < T(0) ? P[1] : T(0));          // the day whose ads report is shown
+  const isToday = rg === "today";
+  const dL = isToday ? "today" : one ? `on ${fds(day)}` : `${fds(P[0])} to ${fds(P[1])}`;
+  const pL = one ? "this month" : rg === "month" ? "this month" : rg === "lmonth" ? "last month" : rg === "week" ? "this week" : rg === "lweek" ? "last week" : "in this period";
+  // monthly targets for the period: a whole month counts 1, other periods by their length
+  const nDays = Math.round((parse(P[1]) - parse(P[0])) / 864e5) + 1;
+  const wholeMonth = P[0] === monthOf(P[0])[0] && P[1] === monthOf(P[0])[1];
+  const tf = one || wholeMonth ? 1 : nDays / 30;
+  const tg = (n) => Math.round((n || 0) * tf);
+  // how much of the period has gone by (for "overdue")
+  const gone = one ? parse(day).getDate() / 30 : Math.min(1, (Math.round((parse(end) - parse(P[0])) / 864e5) + 1) / nDays);
+  const C = active.filter(mineC), mo = P;
   const [q, setQ] = useState(""), [show, setShow] = useState("all"), [page, setPage] = useState(0), [per, setPer] = useState(10);
   // the ads report is sent today for yesterday's numbers (Monday: for Saturday), so both days count
-  const repDays = [day, addD(day, -1), ...(parse(day).getDay() === 1 ? [addD(day, -2)] : [])];
+  const repDays = [end, addD(end, -1), ...(parse(end).getDay() === 1 ? [addD(end, -2)] : [])];
   const repOf = (cid) => D.ads.filter(r => r.cid === cid && repDays.includes(r.date) && hasGoogle(r)).sort((a, b) => (a.sent === b.sent ? b.date.localeCompare(a.date) : a.sent ? -1 : 1))[0] || null;
   const adsC = C.filter(c => c.ads);
   const sent = adsC.filter(c => repOf(c.id)?.sent);
-  const todayW = D.work.filter(w => w.date === day && (who === "all" || w.who === who));
+  const todayW = D.work.filter(w => (one ? w.date === day : inP(w, P)) && (who === "all" || w.who === who));
   const hr = isToday ? new Date().getHours() : 24;   // a past day: anything not sent is late
   const rows = C.map(c => {
     const W = D.work.filter(w => w.cid === c.id);
-    const bt = c.targets?.backlink || 0, gt = c.targets?.gmb || 0;   // monthly targets
+    const bt = tg(c.targets?.backlink), gt = tg(c.targets?.gmb), blT = tg(c.targets?.blog), poT = tg(c.targets?.poster);   // targets for the period
     const m = c.ads ? adsAgg(D.ads.filter(r => r.cid === c.id && inP(r, mo))) : null;
     return {
-      c, bt, gt, m,
+      c, bt, gt, blT, poT, m,
+      adsSent: c.ads && !one ? D.ads.filter(r => r.cid === c.id && inP(r, P) && hasGoogle(r) && r.sent).length : 0,
       bM: W.filter(w => w.type === "backlink" && inP(w, mo)).length,
       gM: W.filter(w => w.type === "gmb" && inP(w, mo)).length,
       blM: W.filter(w => w.type === "blog" && inP(w, mo)).length,
@@ -204,14 +222,14 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
       adsDay: c.ads ? repOf(c.id) : null,
     };
   });
-  const dayOfMonth = parse(day).getDate();
+  const dayOfMonth = Math.round(gone * 30);
   const member = (id) => D.team.find(t => t.id === id);
   const byWho = (cid, type) => {
     const g = {};
     D.work.filter(w => w.cid === cid && w.type === type && inP(w, mo)).forEach(w => { const n = member(w.who)?.name?.split(" ")[0] || "Other"; g[n] = (g[n] || 0) + 1; });
     return Object.entries(g).sort((x, y) => y[1] - x[1]).map(([n, c]) => `${n} ${c}`).join(" · ");
   };
-  const behind = (r) => r.bM < r.bt || r.gM < r.gt || r.blM < (r.c.targets?.blog || 0) || r.poM < (r.c.targets?.poster || 0);
+  const behind = (r) => r.bM < r.bt || r.gM < r.gt || r.blM < r.blT || r.poM < r.poT;
   const F = rows.filter(r => (!q || r.c.name.toLowerCase().includes(q.toLowerCase()))
     && (show === "all" || (show === "ads" && r.c.ads && !r.adsDay?.sent) || (show === "behind" && behind(r)) || (show === "done" && !behind(r) && (!r.c.ads || r.adsDay?.sent))));
   const pages = Math.max(1, Math.ceil(F.length / per)), cur = Math.min(page, pages - 1);
@@ -225,10 +243,10 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
   const remind = async (r) => {
     const todo = [];
     if (r.c.ads && !r.adsDay?.sent) todo.push({ who: r.c.ads, t: "today's Google Ads report" });
-    if (r.bM < r.bt) todo.push({ who: r.c.seo, t: `backlinks (${r.bM} of ${r.bt} this month)` });
-    if (r.gM < r.gt) todo.push({ who: r.c.seo, t: `GMB posts (${r.gM} of ${r.gt} this month)` });
-    if (r.blM < (r.c.targets?.blog || 0)) todo.push({ who: r.c.seo, t: `blogs (${r.blM} of ${r.c.targets?.blog || 0} this month)` });
-    if (r.poM < (r.c.targets?.poster || 0)) todo.push({ who: r.c.design, t: `posters (${r.poM} of ${r.c.targets?.poster || 0} this month)` });
+    if (r.bM < r.bt) todo.push({ who: r.c.seo, t: `backlinks (${r.bM} of ${r.bt} ${pL})` });
+    if (r.gM < r.gt) todo.push({ who: r.c.seo, t: `GMB posts (${r.gM} of ${r.gt} ${pL})` });
+    if (r.blM < r.blT) todo.push({ who: r.c.seo, t: `blogs (${r.blM} of ${r.blT} ${pL})` });
+    if (r.poM < r.poT) todo.push({ who: r.c.design, t: `posters (${r.poM} of ${r.poT} ${pL})` });
     // everyone on the client's team is reminded of everything pending
     const by = {};
     const people = [...new Set([...r.c.members, ...todo.map(x => x.who)].filter(Boolean))];
@@ -243,19 +261,29 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
   return (
     <>
       <div className="td-h">
-        <h2 className="t">{isToday ? "Today" : fdw(day)}<span>.</span></h2>
-        <label className="td-day">Day <input type="date" value={day} max={T(0)} onChange={e => e.target.value && setDay(e.target.value)} /></label>
-        {!isToday && <button type="button" className="btn sm" onClick={() => setDay(T(0))}>Back to today</button>}
+        <h2 className="t">{isToday ? "Today" : one ? fdw(day) : `${fds(P[0])} to ${fds(P[1])}`}<span>.</span></h2>
+        <div className="td-rg">
+          {[["today", "Today"], ["yday", "Yesterday"], ["week", "This week"], ["lweek", "Last week"], ["month", "This month"], ["lmonth", "Last month"], ["custom", "Custom dates"]].map(([k, l]) => (
+            <button key={k} type="button" className={`chip${rg === k ? " on" : ""}`} onClick={() => { setRg(k); setPage(0); }}>{l}</button>
+          ))}
+          {rg === "custom" && (
+            <span className="td-day">
+              <input type="date" value={cf} max={T(0)} onChange={e => e.target.value && setCf(e.target.value)} aria-label="From" />
+              <span>to</span>
+              <input type="date" value={ct} max={T(0)} onChange={e => e.target.value && setCt(e.target.value)} aria-label="To" />
+            </span>
+          )}
+        </div>
       </div>
-      <p className="lead">{fdw(day)} · <b>{sent.length} of {adsC.length} Google Ads reports sent</b> · {todayW.length} work items logged {dL}{!isToday ? ` · month counts are from ${fds(mo[0])} to ${fds(day)}` : ""}</p>
+      <p className="lead">{one ? fdw(day) : `${fd(P[0])} to ${fd(P[1])}`} · <b>{sent.length} of {adsC.length} Google Ads reports sent {one ? "" : `on ${fds(end)}`}</b> · {todayW.length} work items logged {dL}{one && !isToday ? ` · month counts are from ${fds(mo[0])} to ${fds(day)}` : ""}{!one && tf !== 1 ? " · targets are for the length of this period" : ""}</p>
       <div className="kpis">
-        <div className="kpi"><span className="l">Ads reports to clients {dL}</span><span className={`v ${sent.length < adsC.length && hr >= 18 ? "red" : sent.length < adsC.length ? "amb" : "ok"}`}>{sent.length} / {adsC.length}</span><span className="s">Send by 7 pm every working day</span></div>
-        <div className="kpi"><span className="l">Backlinks this month</span><span className="v">{rows.reduce((a, r) => a + r.bM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.bt, 0)} across clients</span></div>
-        <div className="kpi"><span className="l">GMB posts this month</span><span className="v">{rows.reduce((a, r) => a + r.gM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.gt, 0)}</span></div>
-        <div className="kpi"><span className="l">Blogs this month</span><span className="v">{rows.reduce((a, r) => a + r.blM, 0)}</span><span className="s">Target {C.reduce((a, c) => a + (c.targets?.blog || 0), 0)}</span></div>
-        <div className="kpi"><span className="l">Ad spend this month</span><span className="v">{inr(rows.reduce((a, r) => a + (r.m ? r.m.spend : 0), 0))}</span><span className="s">{rows.reduce((a, r) => a + (r.m ? r.m.conv : 0), 0)} leads so far</span></div>
+        <div className="kpi"><span className="l">Ads reports to clients {one ? dL : `on ${fds(end)}`}</span><span className={`v ${sent.length < adsC.length && hr >= 18 ? "red" : sent.length < adsC.length ? "amb" : "ok"}`}>{sent.length} / {adsC.length}</span><span className="s">Send by 7 pm every working day</span></div>
+        <div className="kpi"><span className="l">Backlinks {pL}</span><span className="v">{rows.reduce((a, r) => a + r.bM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.bt, 0)} across clients</span></div>
+        <div className="kpi"><span className="l">GMB posts {pL}</span><span className="v">{rows.reduce((a, r) => a + r.gM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.gt, 0)}</span></div>
+        <div className="kpi"><span className="l">Blogs {pL}</span><span className="v">{rows.reduce((a, r) => a + r.blM, 0)}</span><span className="s">Target {rows.reduce((a, r) => a + r.blT, 0)}</span></div>
+        <div className="kpi"><span className="l">Ad spend {pL}</span><span className="v">{inr(rows.reduce((a, r) => a + (r.m ? r.m.spend : 0), 0))}</span><span className="s">{rows.reduce((a, r) => a + (r.m ? r.m.conv : 0), 0)} leads so far</span></div>
       </div>
-      <div className="card"><h3>Client checklist {isToday ? "for today" : `for ${fds(day)}`} <small>green done · grey pending · red overdue</small></h3>
+      <div className="card"><h3>Client checklist {isToday ? "for today" : one ? `for ${fds(day)}` : `for ${fds(P[0])} to ${fds(P[1])}`} <small>green done · grey pending · red overdue</small></h3>
         <div className="ck-f">
           <input type="search" placeholder="Search client" value={q} onChange={e => { setQ(e.target.value); setPage(0); }} aria-label="Search client" />
           <select value={show} onChange={e => { setShow(e.target.value); setPage(0); }} aria-label="Show">
@@ -275,11 +303,12 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
                 ? r.adsDay?.sent ? <><Chk ok>Sent{r.adsDay.date !== day ? ` (${fds(r.adsDay.date)})` : ""}</Chk>{member(r.adsDay.who) && <span className="sub ck-by">by {member(r.adsDay.who).name.split(" ")[0]}</span>}</>
                   : r.adsDay ? <><button type="button" className="btn sm" onClick={() => setModal({ kind: "adsview", id: r.adsDay.id })}>Ready, not sent · View</button>{member(r.adsDay.who) && <span className="sub ck-by">by {member(r.adsDay.who).name.split(" ")[0]}</span>}</>
                     : <span className={`pill ${hr >= 18 ? "p-red" : "p-grey"}`}>{hr >= 18 ? "Late" : "Not sent yet"}{member(r.c.ads) ? ` · ${member(r.c.ads).name.split(" ")[0]}` : ""}</span>
-                : <span className="sub">No ads</span>}</td>
+                : <span className="sub">No ads</span>}
+                {r.c.ads && !one && <span className="sub ck-by">{r.adsSent} sent in this period</span>}</td>
               <td><Cell n={r.bM} t={r.bt} by={byWho(r.c.id, "backlink")} /></td>
               <td><Cell n={r.gM} t={r.gt} by={byWho(r.c.id, "gmb")} /></td>
-              <td><Cell n={r.blM} t={r.c.targets?.blog || 0} by={byWho(r.c.id, "blog")} /></td>
-              <td><Cell n={r.poM} t={r.c.targets?.poster || 0} by={byWho(r.c.id, "poster")} /></td>
+              <td><Cell n={r.blM} t={r.blT} by={byWho(r.c.id, "blog")} /></td>
+              <td><Cell n={r.poM} t={r.poT} by={byWho(r.c.id, "poster")} /></td>
               <td style={{ minWidth: 150 }}>{r.m && r.c.budget ? (
                 <><span className="ub"><span className={`bar ${pct(r.m.spend, r.c.budget) > pct(dayOfMonth, 30) + 12 ? "red" : ""}`}><i style={{ width: `${Math.min(100, pct(r.m.spend, r.c.budget))}%` }} /></span><span className="num" style={{ fontSize: 12 }}>{pct(r.m.spend, r.c.budget)}%</span></span>
                   <span className="sub">{inr(r.m.spend)} of {inr(r.c.budget)}</span></>

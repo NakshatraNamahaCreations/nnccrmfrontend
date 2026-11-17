@@ -250,3 +250,6 @@
 .ep .ep-new h3 { color: #1D4ED8; }
 
 .ep .ep-plan li .when { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; white-space: nowrap; font-size: 11.5px; }
+
+/* Plans: long plans keep their line breaks */
+.ep .ep-plan li .t { white-space: pre-wrap; overflow-wrap: anywhere; }
