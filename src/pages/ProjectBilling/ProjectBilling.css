@@ -61,3 +61,17 @@
 .bill-biz { color: #0f172a; font-weight: 700; }
 .bill-month { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: #64748b; }
 .bill-month input { border: 1px solid #e2e8f0; border-radius: 9px; padding: 7px 10px; font: inherit; font-size: 13px; background: #fff; }
+
+/* Add monthly service: project search */
+.bp-pick { position: relative; }
+.bp-pick input { width: 100%; box-sizing: border-box; }
+.bp-list { margin-top: 6px; max-height: 240px; overflow-y: auto; border: 1px solid #E4E7EC; border-radius: 10px; background: #fff; box-shadow: 0 8px 24px rgba(16, 24, 40, .08); }
+.bp-list button { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 9px 12px; border: 0; border-bottom: 1px solid #F2F4F7; background: #fff; text-align: left; cursor: pointer; font: inherit; }
+.bp-list button:last-child { border-bottom: 0; }
+.bp-list button:hover { background: #F5F7FF; }
+.bp-list button b { font-size: 14px; color: #101828; font-weight: 600; }
+.bp-list button span { font-size: 12.5px; color: #667085; }
+.bp-empty { padding: 12px; color: #667085; font-size: 13.5px; }
+.bp-chosen { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 9px 12px; border: 1px solid #C7D2FE; border-radius: 10px; background: #EEF2FF; }
+.bp-chosen b { font-size: 14px; color: #1E1B4B; }
+.bp-hint { font-weight: 400; text-transform: none; letter-spacing: 0; color: #98A2B3; }

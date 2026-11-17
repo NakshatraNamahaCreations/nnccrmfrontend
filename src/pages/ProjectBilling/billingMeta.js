@@ -35,8 +35,8 @@ export function canEditBilling() {
 }
 
 // All projects for a "pick a project" dropdown
-export async function fetchProjects() {
-  const json = await billingApi("/leads?limit=200");
+export async function fetchProjects(q = "") {
+  const json = await billingApi(`/leads?limit=200${q ? `&q=${encodeURIComponent(q)}` : ""}`);
   return (json.data || [])
     .map(l => ({ _id: l._id || l.id, name: l.name, business: l.business || l.company || "" }))
     .sort((a, b) => String(a.name).localeCompare(String(b.name)));

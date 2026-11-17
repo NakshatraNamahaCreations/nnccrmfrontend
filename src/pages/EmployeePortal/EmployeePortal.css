@@ -253,3 +253,11 @@
 
 /* Plans: long plans keep their line breaks */
 .ep .ep-plan li .t { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+/* date box that reads day/month/year */
+.dmy { position: relative; display: inline-flex; align-items: center; gap: 8px; min-width: 140px; padding: 7px 10px; border: 1px solid #D0D5DD; border-radius: 8px; background: #fff; cursor: pointer; font-size: 13.5px; color: #101828; vertical-align: middle; }
+.dmy .dmy-v { flex: 1; font-variant-numeric: tabular-nums; }
+.dmy .dmy-v.ph { color: #98A2B3; }
+.dmy .dmy-i { color: #667085; flex: none; }
+.dmy input[type="date"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; }
+.dmy:focus-within { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }

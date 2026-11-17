@@ -6,6 +6,10 @@ import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
 import { billingApi, API } from "../ProjectBilling/billingMeta";
 import { T, fd, fdw, initials, waPhone, copy } from "../SeoTeam/seoUtil";
+import DateDMY from "../../components/DateDMY";
+const dmy = (s) => { const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(s || "")); return m ? `${m[3]}/${m[2]}/${m[1]}` : ""; };
+const DOW = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const fdwy = (s) => (dmy(s) ? `${DOW[new Date(`${String(s).slice(0, 10)}T00:00:00`).getDay()]}, ${dmy(s)}` : "");   // "Tue, 17/11/2026"
 import "../SeoTeam/SeoTeam.css";
 import "./EmployeePortal.css";
 import PortalChat from "./PortalChat";
@@ -1015,8 +1019,8 @@ function Meetings({ since }) {
         <input type="search" placeholder="Search meeting, client or employee" value={fl.q} onChange={setF("q")} aria-label="Search meetings" />
         <select value={fl.who} onChange={setF("who")} aria-label="Employee"><option value="">All employees</option>{people.map(([id, n]) => <option key={id} value={id}>{n}</option>)}</select>
         <select value={fl.mom} onChange={setF("mom")} aria-label="MOM"><option value="">Any MOM status</option><option value="sent">MOM sent</option><option value="unsent">MOM written, not sent</option><option value="notes">Notes only</option></select>
-        <label>From <input type="date" value={fl.from} max={fl.to || undefined} onChange={setF("from")} /></label>
-        <label>To <input type="date" value={fl.to} min={fl.from || undefined} onChange={setF("to")} /></label>
+        <label>From <DateDMY value={fl.from} max={fl.to || undefined} onChange={setF("from")} /></label>
+        <label>To <DateDMY value={fl.to} min={fl.from || undefined} onChange={setF("to")} /></label>
         {filtered && <button type="button" className="btn sm" onClick={() => { setFl({ q: "", who: "", mom: "", from: "", to: "" }); setPage(0); }}>Clear</button>}
       </div>
       <div className="card"><div className="tw"><table>
@@ -1026,7 +1030,7 @@ function Meetings({ since }) {
             <td>{isNew(since, m.createdAt) && <><NewPill /> </>}<b>{m.title}</b><span className="sub">{m.mode}</span></td>
             <td>{m.refName || "Internal"}</td>
             <td>{m.account?.name || "-"}<span className="sub">{ROLES[m.account?.role]?.[0]}</span></td>
-            <td>{fdw(m.date)}{m.time ? `, ${m.time}` : ""}</td>
+            <td className="nw">{fdwy(m.date)}{m.time ? `, ${m.time}` : ""}</td>
             <td>{!m.momTxt ? <span className="pill p-amb">Notes only</span> : sent(m) ? <span className="pill p-ok">Sent{m.sentWa ? " · WhatsApp" : ""}{m.sentMail ? " · Email" : ""}</span> : <span className="pill p-blue">Not sent</span>}</td>
             <td className="r" style={{ whiteSpace: "nowrap" }}><button type="button" className="btn sm" onClick={() => view(m)}>View</button>{" "}
               <button type="button" className="btn sm late" title="Delete" aria-label={`Delete ${m.title}`} onClick={() => del(m)}><Trash2 size={13} /></button></td>
@@ -1037,7 +1041,7 @@ function Meetings({ since }) {
       </div>
       {open && (
         <Modal title={open.title} onClose={() => setOpen(null)} wide>
-          <p className="sub">{[open.refName || "Internal", fdw(open.date), open.account?.name].filter(Boolean).join(" · ")}
+          <p className="sub">{[open.refName || "Internal", fdwy(open.date), open.account?.name].filter(Boolean).join(" · ")}
             <button type="button" className="btn sm late" style={{ float: "right" }} onClick={() => del(open)}><Trash2 size={13} /> Delete</button></p>
           <pre className="ep-mom">{open.momTxt || open.notes}</pre>
           {open.files?.length > 0 && <div className="ep-docs">{open.files.map(f => (

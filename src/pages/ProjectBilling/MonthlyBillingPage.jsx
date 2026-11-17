@@ -86,13 +86,15 @@ export default function MonthlyBillingPage() {
   const anyFilter = !!(search || filter || extraStatus || project || type || month);
   const clearFilters = () => { setSearch(""); setFilter(""); setExtraStatus(""); setProject(""); setType(""); setMonth(""); };
 
-  const q = search.trim().toLowerCase();
-  const matches = (...vals) => !q || vals.some(v => String(v || "").toLowerCase().includes(q));
+  // every word typed must appear somewhere (business, client, phone, service name or type), in any order
+  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (...vals) => { const hay = vals.flat().map(v => String(v || "").toLowerCase()).join(" | "); return words.every(w => hay.includes(w)); };
+  const typesOf = (s) => (s.types?.length ? s.types : [s.type]);
 
   const shownServices = services.filter(s => {
-    if (!matches(s.name, s.type, s.lead?.name, s.lead?.business, s.lead?.company)) return false;
+    if (!matches(s.name, typesOf(s), s.notes, s.lead?.name, s.lead?.business, s.lead?.company, s.lead?.phone)) return false;
     if (project && s.lead?._id !== project) return false;
-    if (type && s.type !== type) return false;
+    if (type && !typesOf(s).includes(type)) return false;
     const st = s.current?.status;
     if (filter === "overdue") return s.overdueCount > 0;
     if (filter === "pending") return ["due", "partial", "overdue"].includes(st);
@@ -102,7 +104,7 @@ export default function MonthlyBillingPage() {
   });
 
   const shownExtras = extras.filter(x =>
-    matches(x.title, x.description, x.lead?.name, x.lead?.business, x.lead?.company) &&
+    matches(x.title, x.description, x.lead?.name, x.lead?.business, x.lead?.company, x.lead?.phone) &&
     (!project || x.lead?._id === project) &&
     (!month || String(x.requestedDate || "").slice(0, 7) === month) &&
     (!extraStatus || (extraStatus === "unpaid" ? x.balance > 0 && x.status !== "cancelled" : x.status === extraStatus)));

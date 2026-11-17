@@ -31,21 +31,49 @@ function Modal({ title, sub, onClose, onSubmit, saving, submitLabel, children })
   );
 }
 
-/* Project dropdown, shown when the form is opened outside a project */
+/* Project search, shown when the form is opened outside a project.
+   Type a business, client name or phone; every project in the CRM is searched, not only the latest ones. */
+const pLabel = (p) => (p.business ? `${p.business} — ${p.name}` : p.name);
 function ProjectPicker({ value, onChange }) {
-  const [projects, setProjects] = useState([]);
+  const [q, setQ]       = useState("");
+  const [list, setList] = useState(null);
+  const [pick, setPick] = useState(null);
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    // listed by business name (what people recognise), with the client's name after it
-    fetchProjects().then(L => setProjects([...L].sort((a, b) => String(a.business || a.name).localeCompare(String(b.business || b.name)))))
-      .catch(() => toast.error("Could not load projects"));
-  }, []);
+    let live = true;
+    const t = setTimeout(() => {
+      fetchProjects(q.trim())
+        .then(L => live && setList([...L].sort((a, b) => String(a.business || a.name).localeCompare(String(b.business || b.name)))))
+        .catch(() => live && setList([]));
+    }, q.trim() ? 250 : 0);
+    return () => { live = false; clearTimeout(t); };
+  }, [q]);
+  const choose = (p) => { setPick(p); setQ(""); setOpen(false); onChange(p._id, p); };
   return (
-    <div className="intg-field">
+    <div className="intg-field bp-pick">
       <label>Project *</label>
-      <select value={value} onChange={e => onChange(e.target.value, projects.find(p => p._id === e.target.value))} required>
-        <option value="">{projects.length ? "Select a project…" : "Loading projects…"}</option>
-        {projects.map(p => <option key={p._id} value={p._id}>{p.business ? `${p.business} — ${p.name}` : p.name}</option>)}
-      </select>
+      {value && pick ? (
+        <div className="bp-chosen">
+          <b>{pLabel(pick)}</b>
+          <button type="button" className="intg-btn ghost" onClick={() => { setPick(null); onChange("", null); setOpen(true); }}>Change</button>
+        </div>
+      ) : (
+        <>
+          <input value={q} onChange={e => { setQ(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
+            placeholder="Search business, client name or phone…" aria-label="Search project" autoComplete="off" />
+          {open && (
+            <div className="bp-list">
+              {list == null ? <div className="bp-empty">Loading…</div>
+                : !list.length ? <div className="bp-empty">No project matches “{q}”</div>
+                : list.slice(0, 60).map(p => (
+                  <button type="button" key={p._id} onClick={() => choose(p)}>
+                    <b>{p.business || p.name}</b>{p.business && p.name !== p.business && <span>{p.name}</span>}
+                  </button>
+                ))}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -128,7 +156,7 @@ export function ServiceFormModal({ initial, leadId, leadName, onSaved, onClose }
   const [project, setProject]     = useState(null);
   const [form, setForm] = useState(() => ({
     name:          initial?.name || "",
-    type:          initial?.type || "Google Ads",
+    types:         initial?.types?.length ? initial.types : [initial?.type || "Google Ads"],
     amount:        initial?.amount ?? "",
     gstApplicable: initial?.gstApplicable ?? false,
     gstRate:       initial?.gstRate ?? 18,
@@ -141,8 +169,15 @@ export function ServiceFormModal({ initial, leadId, leadName, onSaved, onClose }
   const pickProject = !editing && !leadId;
   const set = (patch) => setForm(f => ({ ...f, ...patch }));
 
-  const changeType = (type) =>
-    set({ type, ...(!form.name || SERVICE_TYPES.includes(form.name) ? { name: type === "Other" ? "" : type } : {}) });
+  // several types can be picked, e.g. Google Ads + Meta Ads; the name follows them until it is typed by hand
+  const autoName = (L) => L.filter(t => t !== "Other").join(" + ");
+  const toggleType = (t) => {
+    const on = form.types.includes(t);
+    if (on && form.types.length === 1) return;          // keep at least one
+    const L = on ? form.types.filter(x => x !== t) : SERVICE_TYPES.filter(x => x === t || form.types.includes(x));
+    const typed = form.name && form.name !== autoName(form.types) && !SERVICE_TYPES.includes(form.name);
+    set({ types: L, ...(typed ? {} : { name: autoName(L) }) });
+  };
 
   const save = async (e) => {
     e.preventDefault();
@@ -175,10 +210,10 @@ export function ServiceFormModal({ initial, leadId, leadName, onSaved, onClose }
     >
       {pickProject && <ProjectPicker value={projectId} onChange={(id, p) => { setProjectId(id); setProject(p); }} />}
       <div className="intg-field">
-        <label>Type</label>
+        <label>Type <span className="bp-hint">(pick one or more)</span></label>
         <div className="intg-cat-grid">
           {SERVICE_TYPES.map(t => (
-            <button type="button" key={t} className={`intg-cat-btn${form.type === t ? " active" : ""}`} onClick={() => changeType(t)}>{t}</button>
+            <button type="button" key={t} aria-pressed={form.types.includes(t)} className={`intg-cat-btn${form.types.includes(t) ? " active" : ""}`} onClick={() => toggleType(t)}>{form.types.includes(t) ? "✓ " : ""}{t}</button>
           ))}
         </div>
       </div>
