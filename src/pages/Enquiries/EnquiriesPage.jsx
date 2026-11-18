@@ -63,7 +63,7 @@ const EMPTY_FORM = {
   name: "", phone: "", email: "", company: "", services: [],
   source: "Walk-In", budgetMin: "", budgetMax: "", requirements: "",
   branch: "Bangalore", assignedTo: "", status: "new", followUpDate: "",
-  gstApplicable: false,
+  gstApplicable: false, gstNumber: "",
 };
 
 function getStatusClass(status) {
@@ -451,6 +451,8 @@ export default function EnquiriesPage() {
       assignedTo: enq.assignedTo || "",
       status: enq.status || "new",
       followUpDate: enq.followUpDate ? enq.followUpDate.split("T")[0] : "",
+      gstApplicable: !!enq.gstApplicable,
+      gstNumber: enq.gstNumber || "",
     });
     setEditingId(enq._id);
     setMode("form");
@@ -1791,6 +1793,11 @@ export default function EnquiriesPage() {
                           }}
                         >Without GST</button>
                       </div>
+                      {formData.gstApplicable && (
+                        <input className="enq-input" style={{ marginTop: 8, textTransform: "uppercase" }} maxLength={15}
+                          value={formData.gstNumber || ""} onChange={e => setField("gstNumber", e.target.value.toUpperCase())}
+                          placeholder="GST number (optional), e.g. 29ABCDE1234F1Z5" aria-label="GST number (optional)" />
+                      )}
                     </div>
                     <div className="enq-field">
                       <label className="enq-label">Follow-up Date</label>

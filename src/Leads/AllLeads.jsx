@@ -54,7 +54,7 @@ const EMPTY_EDIT_FORM = {
   stage: "Lead Capture", projectStage: "", priority: "Hot", value: "", days: "0d", rep: "",
   advanceReceived: "", advanceReceivedDate: "", agreedTimeline: "",
   onboardedDate: "", projectCompleted: false, projectCompletionDate: "",
-  gstApplicable: false, gstRate: 18,
+  gstApplicable: false, gstRate: 18, gstNumber: "",
 };
 
 /* Format a Date/ISO string → "YYYY-MM-DD" for <input type="date"> */
@@ -119,7 +119,7 @@ export default function AllLeads() {
   const [addForm, setAddForm] = useState({
     name: "", phone: "", email: "", business: "", industry: "", location: "", requirements: "",
     branch: "Bangalore", source: "WhatsApp", stage: "Lead Capture", priority: "Hot", value: "", rep: "",
-    gstApplicable: false, gstRate: 18,
+    gstApplicable: false, gstRate: 18, gstNumber: "",
     leadDateTime: nowLocal(),
   });
 
@@ -262,7 +262,7 @@ export default function AllLeads() {
   const closeEditModal = () => { setEditOpen(false); setEditForm(EMPTY_EDIT_FORM); };
   const closeAddModal  = () => {
     setAddOpen(false);
-    setAddForm({ name: "", phone: "", email: "", business: "", industry: "", location: "", requirements: "", branch: "Bangalore", source: "WhatsApp", stage: "Lead Capture", projectStage: "", priority: "Hot", value: "", rep: "", gstApplicable: false, gstRate: 18, leadDateTime: nowLocal() });
+    setAddForm({ name: "", phone: "", email: "", business: "", industry: "", location: "", requirements: "", branch: "Bangalore", source: "WhatsApp", stage: "Lead Capture", projectStage: "", priority: "Hot", value: "", rep: "", gstApplicable: false, gstRate: 18, gstNumber: "", leadDateTime: nowLocal() });
   };
 
   const handleEditLead = async (e, id) => {
@@ -298,6 +298,7 @@ export default function AllLeads() {
         projectCompletionDate:   toDateInput(l.projectCompletionDate),
         gstApplicable:           !!l.gstApplicable,
         gstRate:                 l.gstRate || 18,
+        gstNumber:               l.gstNumber || "",
       });
     } catch (e) { toast.error(e?.message || "Failed to load lead"); setEditOpen(false); }
     finally { setEditLoading(false); }
@@ -336,6 +337,7 @@ export default function AllLeads() {
           projectCompletionDate: editForm.projectCompletionDate || null,
           gstApplicable:         editForm.gstApplicable,
           gstRate:               Number(editForm.gstRate || 18),
+          gstNumber:             editForm.gstApplicable ? (editForm.gstNumber || "") : "",
         }),
       });
       const json = await res.json();
@@ -611,6 +613,7 @@ export default function AllLeads() {
                       value={editForm.value}
                       gstApplicable={editForm.gstApplicable}
                       gstRate={editForm.gstRate}
+                      gstNumber={editForm.gstNumber || ""}
                       onChange={patch => setEditForm(p => ({ ...p, ...patch }))}
                     />
                   </div>
@@ -684,6 +687,7 @@ export default function AllLeads() {
                     value={addForm.value}
                     gstApplicable={!!addForm.gstApplicable}
                     gstRate={addForm.gstRate || 18}
+                    gstNumber={addForm.gstNumber || ""}
                     onChange={patch => setAddForm(p => ({ ...p, ...patch }))}
                   />
                 </div>

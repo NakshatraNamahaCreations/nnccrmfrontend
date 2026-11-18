@@ -867,6 +867,19 @@ function TeamReport({ D, P, rp, who, client, av, mineC }) {
   const wdE = Math.max(1, workdaysIn([P[0], P[1] < T(0) ? P[1] : T(0)])), el = wdE / Math.max(1, workdaysIn(P));
   const isM = rp.includes("month"), isC = rp === "custom";
   const tf = isC ? (Math.round((parse(P[1]) - parse(P[0])) / 864e5) + 1) / 30 : isM ? 1 : 0.25;
+  const [sel, setSel] = useState("");   // a team member clicked in the table: their work only
+  const selT = T1.find(t => t.id === sel);
+  const KINDS = [["backlink", "Backlinks"], ["blog", "Blogs"], ["gmb", "GMB posts"], ["poster", "Posters"]];
+  // one person's work, client by client
+  const mine = selT ? (() => {
+    const W = D.work.filter(w => w.who === sel && inP(w, P)), A = D.ads.filter(r => r.who === sel && inP(r, P));
+    const ids = [...new Set(W.map(w => w.cid).concat(A.map(a => a.cid)))];
+    return ids.map(id => {
+      const w = W.filter(x => x.cid === id), a = A.filter(x => x.cid === id);
+      return { id, name: client(id)?.name || "Other", w, a, n: (k) => w.filter(x => x.type === k).length, soc: w.filter(x => x.kind === "social").length,
+        oth: kindSum(w.filter(x => !MAIN_T.includes(x.type) && x.kind !== "social")) };
+    }).sort((x, y) => (y.w.length + y.a.length) - (x.w.length + x.a.length));
+  })() : [];
   return (
     <article className="rep" id="seo-rep">
       <div className="rh"><div style={{ display: "flex", gap: 14, alignItems: "center" }}><Logo src={D.logo} size={46} /><div><h2>Team summary<span>.</span></h2><p>{fd(P[0])} to {fd(P[1])} · {workdaysIn(P)} working days{el < 1 ? ` (${wdE} so far)` : ""}</p></div></div></div>
@@ -876,7 +889,7 @@ function TeamReport({ D, P, rp, who, client, av, mineC }) {
           const n = (k) => W.filter(w => w.type === k).length;
           const cl = [...new Set(W.map(w => w.cid).concat(A.map(a => a.cid)))].map(id => client(id)?.name).filter(Boolean);
           return (
-            <tr key={t.id}>
+            <tr key={t.id} className={`tm-row${sel === t.id ? " on" : ""}`} onClick={() => setSel(sel === t.id ? "" : t.id)} title="Click to see this person's work, project by project">
               <td><span className="who">{av(t.id)}<span><b style={{ fontWeight: 500 }}>{t.name}</b><span className="sub">{(t.roles?.length ? t.roles : [t.role]).map(r => ROLE_L[r] || r).join(", ")}</span></span></span></td>
               <td className="r num">{n("backlink") || "-"}</td><td className="r num">{n("blog") || "-"}</td><td className="r num">{n("gmb") || "-"}</td><td className="r num">{n("poster") || "-"}</td>
               <td className="r num">{W.filter(w => w.kind === "social").length || "-"}</td>
@@ -889,11 +902,36 @@ function TeamReport({ D, P, rp, who, client, av, mineC }) {
         })}
         {!T1.length && <tr><td colSpan={12} className="empty">No team members yet.</td></tr>}
       </tbody></table></div>
-      <div className="tiles">{D.clients.filter(c => c.isActive !== false && mineC(c)).map(c => {
-        const W = D.work.filter(w => w.cid === c.id && inP(w, P) && MAIN_T.includes(w.type)), f = tf;
-        const tot = ["backlink", "blog", "gmb", "poster"].reduce((a, k) => a + Math.round((c.targets?.[k] || 0) * f), 0);
+      {!selT && T1.length > 0 && <p className="note" style={{ margin: "8px 0 0" }}>Click a team member to see what they did in each project.</p>}
+      {selT && (
+        <div className="tm-pick">
+          <div className="tm-pick-h"><b>{selT.name}</b> · work in each project, {fd(P[0])} to {fd(P[1])}
+            <button type="button" className="btn sm" onClick={() => setSel("")}>Show everyone</button></div>
+          <div className="tw"><table><thead><tr><th>Project</th>{KINDS.map(([, l]) => <th key={l} className="r">{l}</th>)}<th className="r">Social posts</th><th>Other work</th><th className="r">Ads reports</th><th className="r">Total</th></tr></thead><tbody>
+            {mine.map(r => (
+              <tr key={r.id}><td><b style={{ fontWeight: 500 }}>{r.name}</b></td>
+                {KINDS.map(([k]) => <td key={k} className="r num">{r.n(k) || "-"}</td>)}
+                <td className="r num">{r.soc || "-"}</td>
+                <td><span className="sub" style={{ color: "var(--text)" }}>{r.oth.map(([k, n]) => `${k} ${n}`).join(", ") || "-"}</span></td>
+                <td className="r num">{r.a.length || "-"}</td><td className="r num b">{r.w.length + r.a.length}</td></tr>
+            ))}
+            {!mine.length && <tr><td colSpan={9} className="empty">{selT.name} has no work logged in this period.</td></tr>}
+          </tbody></table></div>
+        </div>
+      )}
+      <h4 style={{ margin: "18px 0 8px" }}>{selT ? `Projects ${selT.name} worked on` : "Projects"}</h4>
+      <div className="tiles">{D.clients.filter(c => c.isActive !== false && mineC(c) && (!selT || mine.some(r => r.id === c.id))).map(c => {
+        const All = D.work.filter(w => w.cid === c.id && inP(w, P) && (!selT || w.who === sel)), f = tf;
+        const W = All.filter(w => MAIN_T.includes(w.type));
+        const tot = KINDS.reduce((a, [k]) => a + Math.round((c.targets?.[k] || 0) * f), 0);
         const ex = Math.round(tot * el), p = ex ? pct(W.length, ex) : 100;
-        return <div key={c.id} className="tile"><div className="l">{c.name}</div><div className="v">{p}%</div><div className="s">{W.length} done · {ex} expected by today · {tot} for the {isC ? "period" : isM ? "month" : "week"}</div><div className={`bar ${p >= 100 ? "ok" : p < 70 ? "red" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, p)}%` }} /></div></div>;
+        const soc = All.filter(w => w.kind === "social").length, oth = All.filter(w => !MAIN_T.includes(w.type) && w.kind !== "social").length;
+        return <div key={c.id} className="tile"><div className="l">{c.name}</div><div className="v">{p}%</div><div className="s">{W.length} done · {ex} expected by today · {tot} for the {isC ? "period" : isM ? "month" : "week"}{selT ? ` · by ${selT.name}` : ""}</div><div className={`bar ${p >= 100 ? "ok" : p < 70 ? "red" : "amb"}`} style={{ marginTop: 6 }}><i style={{ width: `${Math.min(100, p)}%` }} /></div>
+          <div className="tl-brk">
+            {KINDS.map(([k, l]) => { const d = W.filter(w => w.type === k).length, t = Math.round((c.targets?.[k] || 0) * f); return (d || t) ? <div key={k}><span>{l}</span><b className={t && d < t ? "lo" : ""}>{d}{t ? <small> of {t}</small> : null}</b></div> : null; })}
+            {soc > 0 && <div><span>Social posts</span><b>{soc}</b></div>}
+            {oth > 0 && <div><span>Other work</span><b>{oth}</b></div>}
+          </div></div>;
       })}</div>
     </article>
   );

@@ -218,3 +218,17 @@
 .ck-by { display: block; margin-top: 3px; font-size: 11.5px; }
 .td-rg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .td-rg .td-day input { height: 34px; }
+
+/* Team summary: click a person, project cards with what was done */
+.tm-row { cursor: pointer; }
+.tm-row:hover td { background: #F8FAFC; }
+.tm-row.on td { background: #EEF2FF; }
+.tm-pick { margin-top: 14px; border: 1px solid #C7D2FE; border-radius: 12px; padding: 12px 14px; background: #FAFBFF; }
+.tm-pick-h { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; font-size: 14px; }
+.tm-pick-h .btn { margin-left: auto; }
+.tl-brk { margin-top: 10px; padding-top: 8px; border-top: 1px solid #EEF0F3; display: grid; gap: 4px; }
+.tl-brk div { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: #475467; }
+.tl-brk b { font-weight: 600; color: #101828; font-variant-numeric: tabular-nums; }
+.tl-brk b.lo { color: #B42318; }
+.tl-brk small { font-weight: 400; color: #98A2B3; }
+@media print { .tm-row { cursor: default; } .tm-pick-h .btn { display: none; } }

@@ -13,7 +13,7 @@ const btn = (active) => ({
  * the "Total Amount Agreed" field. `onChange(patch)` receives
  * { gstApplicable } or { gstRate }.
  */
-export default function GstPicker({ value, gstApplicable, gstRate, onChange }) {
+export default function GstPicker({ value, gstApplicable, gstRate, gstNumber, onChange }) {
   const { base, gst, total } = calcGst(value, gstApplicable, gstRate);
 
   return (
@@ -32,6 +32,18 @@ export default function GstPicker({ value, gstApplicable, gstRate, onChange }) {
           </select>
         )}
       </div>
+
+      {gstApplicable && gstNumber !== undefined && (
+        <input
+          type="text"
+          value={gstNumber || ""}
+          onChange={e => onChange({ gstNumber: e.target.value.toUpperCase() })}
+          placeholder="GST number (optional), e.g. 29ABCDE1234F1Z5"
+          maxLength={15}
+          aria-label="GST number (optional)"
+          style={{ width: "100%", boxSizing: "border-box", textTransform: "uppercase", letterSpacing: ".04em" }}
+        />
+      )}
 
       {base > 0 && (
         <div style={{

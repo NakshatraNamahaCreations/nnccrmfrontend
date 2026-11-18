@@ -89,6 +89,7 @@ export function ExtraFormModal({ initial, leadId, leadName, onSaved, onClose }) 
     description:   initial?.description || "",
     amount:        initial?.amount ?? "",
     gstApplicable: initial?.gstApplicable ?? false,
+    gstNumber:     initial?.gstNumber || "",
     gstRate:       initial?.gstRate ?? 18,
     status:        initial?.status || "quoted",
     requestedDate: toDateInput(initial?.requestedDate) || today(),
@@ -138,7 +139,7 @@ export function ExtraFormModal({ initial, leadId, leadName, onSaved, onClose }) 
           <input type="date" value={form.requestedDate} onChange={e => set({ requestedDate: e.target.value })} />
         </div>
       </div>
-      <GstPicker value={form.amount} gstApplicable={form.gstApplicable} gstRate={form.gstRate} onChange={set} />
+      <GstPicker value={form.amount} gstApplicable={form.gstApplicable} gstRate={form.gstRate} gstNumber={form.gstNumber} onChange={set} />
       <div className="intg-field">
         <label>Status</label>
         <select value={form.status} onChange={e => set({ status: e.target.value })}>
@@ -159,6 +160,7 @@ export function ServiceFormModal({ initial, leadId, leadName, onSaved, onClose }
     types:         initial?.types?.length ? initial.types : [initial?.type || "Google Ads"],
     amount:        initial?.amount ?? "",
     gstApplicable: initial?.gstApplicable ?? false,
+    gstNumber:     initial?.gstNumber || "",
     gstRate:       initial?.gstRate ?? 18,
     billingDay:    initial?.billingDay ?? 5,
     startDate:     toDateInput(initial?.startDate) || today(),
@@ -231,7 +233,7 @@ export function ServiceFormModal({ initial, leadId, leadName, onSaved, onClose }
           <input type="number" min="1" max="28" value={form.billingDay} onChange={e => set({ billingDay: e.target.value })} />
         </div>
       </div>
-      <GstPicker value={form.amount} gstApplicable={form.gstApplicable} gstRate={form.gstRate} onChange={set} />
+      <GstPicker value={form.amount} gstApplicable={form.gstApplicable} gstRate={form.gstRate} gstNumber={form.gstNumber} onChange={set} />
       <div className="intg-grid">
         <div className="intg-field">
           <label>Start date *</label>

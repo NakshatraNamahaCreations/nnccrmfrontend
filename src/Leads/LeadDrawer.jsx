@@ -75,6 +75,7 @@ const EMPTY_EDIT_FORM = {
   projectCompletionDate: "",
   gstApplicable: false,
   gstRate: 18,
+  gstNumber: "",
 };
 
 const EmptyState = ({ title, sub }) => {
@@ -507,6 +508,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
           : "",
         gstApplicable: Boolean(lead.gstApplicable),
         gstRate: lead.gstRate || 18,
+        gstNumber: lead.gstNumber || "",
       });
 
       setEditOpen(true);
@@ -593,6 +595,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
         projectCompletionDate: editForm.projectCompletionDate || null,
         gstApplicable: editForm.gstApplicable,
         gstRate: Number(editForm.gstRate || 18),
+        gstNumber: editForm.gstApplicable ? (editForm.gstNumber || "") : "",
       };
 
       const res = await fetch(`${apiBase}/api/leads/${editForm._id}`, {
@@ -908,6 +911,7 @@ export default function LeadDrawer({ open, leadId, apiBase, onClose, onLeadUpdat
                     value={editForm.value}
                     gstApplicable={editForm.gstApplicable}
                     gstRate={editForm.gstRate}
+                    gstNumber={editForm.gstNumber || ""}
                     onChange={patch => setEditForm(p => ({ ...p, ...patch }))}
                   />
                 </div>
@@ -1120,7 +1124,7 @@ function ProfileTab({ lead }) {
           <div className="ldInfoItem">
             <div className="ldLabel">GST</div>
             <div className="ldVal">
-              {lead.gstApplicable ? `${gstInfo.rate}% · ₹${gstInfo.gst.toLocaleString("en-IN")}` : "Without GST"}
+              {lead.gstApplicable ? `${gstInfo.rate}% · ₹${gstInfo.gst.toLocaleString("en-IN")}${lead.gstNumber ? ` · GSTIN ${lead.gstNumber}` : ""}` : "Without GST"}
             </div>
           </div>
           {lead.gstApplicable && lead.value > 0 && (
