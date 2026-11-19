@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Plus, RefreshCcw, Search, Edit2, UserX, UserCheck, Clock, Briefcase, Phone, Mail, X, TrendingUp, ChevronDown, ChevronUp, CalendarDays, Cake, BadgeCheck } from "lucide-react";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 const BRANCHES = ["Bangalore", "Mysore", "Mumbai"];
@@ -197,9 +198,7 @@ export default function EmployeesTab({ branch }) {
   const filtered = employees.filter(e => {
     if (filterStatus === "active" && e.isActive === false) return false;
     if (filterStatus === "inactive" && e.isActive !== false) return false;
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return (e.name || "").toLowerCase().includes(q) || (e.employeeId || "").toLowerCase().includes(q) || (e.designation || "").toLowerCase().includes(q);
+    return matchesSearch(search, e.name, e.employeeId, e.designation, e.department, e.branch, e.phone, e.email, e.employmentType);
   });
 
   const modalOpen = addOpen || editOpen;

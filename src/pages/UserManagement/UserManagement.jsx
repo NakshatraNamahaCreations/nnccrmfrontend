@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import "./UserManagement.css";
 
 const API_BASE = import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5000";
@@ -224,12 +225,7 @@ export default function UserManagement() {
     }
   };
 
-  const filtered = users.filter(u =>
-    !search.trim() ||
-    u.name?.toLowerCase().includes(search.toLowerCase()) ||
-    u.username?.toLowerCase().includes(search.toLowerCase()) ||
-    u.role?.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = users.filter(u => matchesSearch(search, u.name, u.username, u.role, u.modules));
 
   const stats = {
     total:  users.length,

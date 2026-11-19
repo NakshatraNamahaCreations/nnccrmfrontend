@@ -4,6 +4,7 @@ import {
 } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import { billingApi } from "../ProjectBilling/billingMeta";
 import {
   KIND, DEFAULT_TPL, leadClient, enquiryClient, buildItems, fillTemplate, bankText, exportCsv,
@@ -109,9 +110,7 @@ export default function SalesDesk() {
 
   const mine = useCallback((c) => who === "all" || c.owner === who, [who]);
   const matchQ = useCallback((c) => {
-    if (!q) return true;
-    const s = q.toLowerCase();
-    return [c.name, c.company, c.phone, c.project, c.email].some(v => String(v || "").toLowerCase().includes(s));
+    return matchesSearch(q, c.name, c.company, c.phone, c.project, c.email, c.owner, c.source);
   }, [q]);
   const myItems = useMemo(() => items.filter(x => mine(x.c) && matchQ(x.c)), [items, mine, matchQ]);
   const dueItems = myItems.filter(x => x.due <= 0);

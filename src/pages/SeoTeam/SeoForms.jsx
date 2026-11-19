@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import {
   seoApi, T, fd, fds, fdw, inr, inr2, num, TYPES, ROLE, BACKLINK_KINDS, monthOf, adsAgg, adsText, parseTerms,
   kwStat, posTxt, posVal, waPhone, copy,
@@ -332,9 +333,8 @@ export function ClientForm({ D, edit, onClose, onSaved }) {
     }
   };
   const options = useMemo(() => {
-    const s = find.trim().toLowerCase();
     const L = (leads || []).filter(l => !D.clients.some(c => String(c.lead?._id || c.lead) === l._id));
-    const hit = L.filter(l => !s || [l.name, l.business, l.company, l.phone, l.email].some(v => String(v || "").toLowerCase().includes(s)));
+    const hit = L.filter(l => matchesSearch(find, l.name, l.business, l.company, l.phone, l.email, l.project, (l.services || []).map(x => x.type)));
     // leads with an SEO / Ads monthly service first, then projects (ongoing and completed), then other leads
     const rank = (l) => (l.services.length ? 2 : 0) + (l.project ? 1 : 0);
     return hit.sort((a, b) => rank(b) - rank(a)).slice(0, 600);

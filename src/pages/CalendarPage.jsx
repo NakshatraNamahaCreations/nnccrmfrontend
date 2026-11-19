@@ -3,6 +3,7 @@ import { CalendarDays, X } from "lucide-react";
 import Sidebar from "../components/Sidebar/Sidebar";
 import LeadDrawer from "../Leads/LeadDrawer";
 import { toast } from "../utils/toast";
+import { matchesSearch } from "../utils/search";
 import { billingApi, API } from "./ProjectBilling/billingMeta";
 import "./CalendarPage.css";
 
@@ -405,8 +406,7 @@ function NewForm({ pre, sel, clients, events, onClose, onSaved }) {
   const upd = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
   const client = (clients || []).find(c => c.id === clientId) || null;
   const options = useMemo(() => {
-    const s = find.trim().toLowerCase();
-    return (clients || []).filter(c => !s || [c.name, c.company, c.phone].some(v => String(v || "").toLowerCase().includes(s))).slice(0, 150);
+    return (clients || []).filter(c => matchesSearch(find, c.name, c.company, c.phone, c.email)).slice(0, 150);
   }, [clients, find]);
   const clash = t.timed && f.time ? events.find(e => e.day === f.date && isTimed(e) && e.status !== "cancelled" &&
     toMin(f.time) < toMin(e.time) + (e.duration || 30) && toMin(f.time) + Number(f.duration) > toMin(e.time)) : null;

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw, User, Clock, Bell, FileText, Flame, Trophy, Copy, Eraser, CalendarDays } from "lucide-react";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import { billingApi } from "../ProjectBilling/billingMeta";
 import {
   buildLeads, TEAM, STAGES, STL, STC, OPEN, isOpen, VIEWS, AGE, inAge, SERVICES, val, band, why, prio,
@@ -138,8 +139,8 @@ export default function LeadTracker() {
     if (f.owner) A = A.filter(l => l.owner === f.owner);
     if (f.branch) A = A.filter(l => l.branch === f.branch);
     if (f.site) A = A.filter(l => (f.site === "lead" ? l.src === "lead" : l.src === "enq" && l.site === f.site));
-    if (f.client.trim()) { const c = f.client.toLowerCase().trim(); A = A.filter(l => l.name.toLowerCase().includes(c) || l.company.toLowerCase().includes(c)); }
-    if (f.project.trim()) { const c = f.project.toLowerCase().trim(); A = A.filter(l => `${l.services} ${l.need} ${l.svc} ${l.landing} ${l.lead?.requirements || ""}`.toLowerCase().includes(c)); }
+    if (f.client.trim()) A = A.filter(l => matchesSearch(f.client, l.name, l.company));
+    if (f.project.trim()) A = A.filter(l => matchesSearch(f.project, l.services, l.need, l.svc, l.landing, l.lead?.requirements));
     if (f.from || f.to) { const get = DFIELD[f.dfield]?.[1] || DFIELD.created[1]; A = A.filter(l => { const d = get(l); return d && (!f.from || d >= f.from) && (!f.to || d <= f.to); }); }
     if (f.has === "quote") A = A.filter(l => l.quotes.length);
     if (f.has === "noquote") A = A.filter(l => !l.quotes.length);
@@ -149,10 +150,7 @@ export default function LeadTracker() {
     if (f.has === "balance") A = A.filter(l => l.money?.balance > 0);
     if (f.vmin !== "") A = A.filter(l => val(l) >= Number(f.vmin));
     if (f.vmax !== "") A = A.filter(l => val(l) <= Number(f.vmax));
-    if (f.q.trim()) {
-      const q = f.q.toLowerCase().trim(), dg = q.replace(/\D/g, "");
-      A = A.filter(l => (dg.length >= 4 && ph10(l.phone).includes(dg)) || l.name.toLowerCase().includes(q) || l.company.toLowerCase().includes(q) || l.email.toLowerCase().includes(q) || l.need.toLowerCase().includes(q));
-    }
+    if (f.q.trim()) A = A.filter(l => matchesSearch(f.q, l.name, l.company, l.phone, l.email, l.need, l.services, l.svc, l.landing, l.source, l.owner, l.branch, (l.quotes || []).map(x => x.quoteNumber)));
     const so = { prio: (a, b) => prio(b) - prio(a), new: (a, b) => b.created - a.created, old: (a, b) => a.created - b.created, val: (a, b) => val(b) - val(a), score: (a, b) => b.sc - a.sc, nf: (a, b) => (a.nf || "9").localeCompare(b.nf || "9") }[sort];
     return [...A].sort(so);
   }, [scope, f, sort]);
@@ -224,7 +222,7 @@ function Tile({ ic, c, bg, t, n, s, onClick }) {
 function Today({ scope: all, tf, setTf, sources, owners, goView, openLead, ownC, act, run }) {
   const t = TODAY(), ms = t.slice(0, 8) + "01";
   const scope = all.filter(l => (!tf.src || l.source === tf.src) && (!tf.svc || l.svc === tf.svc) && (!tf.band || band(l.sc) === tf.band) && (!tf.stage || l.st === tf.stage) && (!tf.owner || l.owner === tf.owner)
-    && (!tf.q.trim() || `${l.name} ${l.company} ${l.phone} ${l.need} ${l.services}`.toLowerCase().includes(tf.q.toLowerCase().trim())));
+    && matchesSearch(tf.q, l.name, l.company, l.phone, l.email, l.need, l.services, l.svc, l.owner));
   const tOn = Object.values(tf).some(Boolean);
   const set = (k, v) => setTf(x => ({ ...x, [k]: v }));
   const pick = (k, label, opts) => (
@@ -488,8 +486,7 @@ function Board({ scope, openLead, ownC, act, run, drag, setDrag, over, setOver, 
 /* ───────── Clients ───────── */
 function Clients({ scope, openLead, ownC, cf, setCf }) {
   const W = scope.filter(l => l.st === "won");
-  const q = cf.q.toLowerCase();
-  let A = W.filter(l => !q || l.name.toLowerCase().includes(q) || l.company.toLowerCase().includes(q) || (q.replace(/\D/g, "").length >= 4 && ph10(l.phone).includes(q.replace(/\D/g, ""))));
+  let A = W.filter(l => matchesSearch(cf.q, l.name, l.company, l.phone, l.email, l.need, l.services, l.owner, l.branch));
   const m = (l) => l.money || { total: 0, received: 0, balance: 0 };
   if (cf.f === "due") A = A.filter(l => m(l).balance > 0);
   if (cf.f === "paid") A = A.filter(l => m(l).total > 0 && m(l).balance <= 0);

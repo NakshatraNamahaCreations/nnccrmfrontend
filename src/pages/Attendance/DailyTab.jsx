@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { RefreshCcw, Search, Clock } from "lucide-react";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
 
@@ -115,11 +116,8 @@ export default function DailyTab({ branch }) {
   }, {});
 
   const filtered = search
-    ? records.filter(r => {
-        const q = search.toLowerCase();
-        return (r.employee?.name || "").toLowerCase().includes(q) ||
-               (r.employee?.employeeId || "").toLowerCase().includes(q);
-      })
+    ? records.filter(r => matchesSearch(search, r.employee?.name, r.employee?.employeeId, r.employee?.designation,
+        r.employee?.department, r.employee?.branch, r.employee?.phone, r.employee?.email, r.attendance?.status))
     : records;
 
   return (

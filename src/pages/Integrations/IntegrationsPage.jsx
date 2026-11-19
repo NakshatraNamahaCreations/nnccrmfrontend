@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Search, RefreshCw, Plus, ChevronDown, ChevronRight } from "lucide-react";
 import Pager from "../LeadTracker/Pager";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import IntegrationFormModal from "./IntegrationFormModal";
 import { IntegrationCard } from "./ProjectIntegrations";
@@ -69,16 +70,14 @@ export default function IntegrationsPage() {
 
   // Filter, then group by project
   const groups = useMemo(() => {
-    const q = search.trim().toLowerCase();
     const list = scoped.filter(i => {
       if (category && i.category !== category) return false;
       if (status && i.status !== status) return false;
       if (cardFilter === "live" && i.status !== "live") return false;
       if (cardFilter === "issue" && i.status !== "issue") return false;
       if (cardFilter === "renewal" && !["soon", "overdue"].includes(renewalState(i.renewalDate))) return false;
-      if (!q) return true;
-      return [i.service, i.category, i.username, i.lead?.name, i.lead?.business, i.lead?.company]
-        .some(v => String(v || "").toLowerCase().includes(q));
+      return matchesSearch(search, i.service, i.category, i.username, i.loginUrl, i.notes, i.mode, i.addedBy,
+        i.lead?.name, i.lead?.business, i.lead?.company, i.lead?.phone);
     });
     const map = new Map();
     for (const i of list) {

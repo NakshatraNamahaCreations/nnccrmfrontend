@@ -5,6 +5,7 @@ import { billingApi } from "../ProjectBilling/billingMeta";
 import Pager from "../LeadTracker/Pager";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import {
   seoApi, T, ds, fd, fds, fdw, inr, inr2, num, pct, initials, waPhone, TYPES, ROLE,
   weekOf, monthOf, period, PER, inP, workdaysIn, adsAgg, kwStat, posTxt, posVal, dist, BUCKETS, downloadCsv, copy, greet, parse, addD,
@@ -230,7 +231,7 @@ function TodayView({ D, client, av, mineC, active, who, setModal, setTab, setSel
     return Object.entries(g).sort((x, y) => y[1] - x[1]).map(([n, c]) => `${n} ${c}`).join(" · ");
   };
   const behind = (r) => r.bM < r.bt || r.gM < r.gt || r.blM < r.blT || r.poM < r.poT;
-  const F = rows.filter(r => (!q || r.c.name.toLowerCase().includes(q.toLowerCase()))
+  const F = rows.filter(r => matchesSearch(q, r.c.name, r.c.site, r.c.contact, r.c.phone, r.c.email, r.c.members.map(id => member(id)?.name))
     && (show === "all" || (show === "ads" && r.c.ads && !r.adsDay?.sent) || (show === "behind" && behind(r)) || (show === "done" && !behind(r) && (!r.c.ads || r.adsDay?.sent))));
   const pages = Math.max(1, Math.ceil(F.length / per)), cur = Math.min(page, pages - 1);
   const shown = F.slice(cur * per, cur * per + per);
@@ -336,7 +337,7 @@ function WorkView({ D, client, av, who, load }) {
   if (f.cid) L = L.filter(w => w.cid === f.cid);
   if (f.type) L = L.filter(w => w.type === f.type);
   if (f.who) L = L.filter(w => w.who === f.who);
-  if (f.q) { const q = f.q.toLowerCase(); L = L.filter(w => `${w.url} ${w.title} ${w.kw}`.toLowerCase().includes(q)); }
+  if (f.q) L = L.filter(w => matchesSearch(f.q, w.url, w.title, w.kw, client(w.cid)?.name, TYPES[w.type], D.team.find(t => t.id === w.who)?.name));
   L = [...L].sort((a, b) => b.date.localeCompare(a.date));
   const cnt = (k) => L.filter(w => w.type === k).length;
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
@@ -352,7 +353,7 @@ function WorkView({ D, client, av, who, load }) {
         <select value={f.cid} onChange={set("cid")} aria-label="Client"><option value="">All clients</option>{D.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <select value={f.type} onChange={set("type")} aria-label="Type"><option value="">All types</option>{Object.entries(TYPES).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
         <select value={f.who} onChange={set("who")} aria-label="Person"><option value="">Everyone</option>{D.team.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
-        <input type="search" value={f.q} onChange={set("q")} placeholder="Search link, title or keyword" style={{ minWidth: 220 }} aria-label="Search" />
+        <input type="search" value={f.q} onChange={set("q")} placeholder="Search link, title, keyword, client or person" style={{ minWidth: 220 }} aria-label="Search" />
         <span style={{ flex: 1 }} />
         <button type="button" className="btn" onClick={() => { copy(L.map(w => w.url).filter(Boolean).join("\n")); toast.success(`${L.length} links copied`); }}>Copy links</button>
         <button type="button" className="btn" onClick={() => downloadCsv([["Date", "Client", "Type", "Title", "Keyword", "DA", "URL", "By", "Status"],

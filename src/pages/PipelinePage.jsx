@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Sidebar from "../components/Sidebar/Sidebar";
 import LeadDrawer from "../Leads/LeadDrawer";
+import { matchesSearch } from "../utils/search";
 import "./PipelinePage.css";
 
 const API_BASE = import.meta?.env?.VITE_API_BASE_URL || "http://localhost:5000";
@@ -79,10 +80,9 @@ export default function PipelinePage() {
 
   const stageLeads = useMemo(() => {
     const raw = pipeline[activeStage] || [];
-    const q   = search.trim().toLowerCase();
     return raw.filter(l => {
       const matchBranch = activeBranch === "All" || l.branch === activeBranch;
-      const matchSearch = !q || [l.name, l.phone, l.business, l.source, l.repName, l.rep].join(" ").toLowerCase().includes(q);
+      const matchSearch = matchesSearch(search, l.name, l.phone, l.business, l.company, l.email, l.requirements, l.location, l.source, l.repName, l.rep);
       return matchBranch && matchSearch;
     });
   }, [pipeline, activeStage, activeBranch, search]);

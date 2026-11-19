@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { matchesSearch } from "../../utils/search";
 import { Plus, RefreshCw, Search } from "lucide-react";
 import { toast } from "../../utils/toast";
 import Sidebar from "../../components/Sidebar/Sidebar";
@@ -87,8 +88,7 @@ export default function MonthlyBillingPage() {
   const clearFilters = () => { setSearch(""); setFilter(""); setExtraStatus(""); setProject(""); setType(""); setMonth(""); };
 
   // every word typed must appear somewhere (business, client, phone, service name or type), in any order
-  const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const matches = (...vals) => { const hay = vals.flat().map(v => String(v || "").toLowerCase()).join(" | "); return words.every(w => hay.includes(w)); };
+  const matches = (...vals) => matchesSearch(search, ...vals);
   const typesOf = (s) => (s.types?.length ? s.types : [s.type]);
 
   const shownServices = services.filter(s => {

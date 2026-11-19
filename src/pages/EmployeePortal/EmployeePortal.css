@@ -261,3 +261,6 @@
 .dmy .dmy-i { color: #667085; flex: none; }
 .dmy input[type="date"] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; margin: 0; }
 .dmy:focus-within { border-color: #2563EB; box-shadow: 0 0 0 3px rgba(37, 99, 235, .15); }
+
+/* Task priority: a small coloured select the admin can change in the table */
+.ep select.pri-sel { height: 28px; padding: 0 6px; border-radius: 999px; border: 0; font-size: 12.5px; font-weight: 600; cursor: pointer; }

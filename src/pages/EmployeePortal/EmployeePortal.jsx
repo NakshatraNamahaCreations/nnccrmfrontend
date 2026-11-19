@@ -4,6 +4,7 @@ import { UserCheck, RefreshCw, X, Trash2, Eye, EyeOff, UserPlus, Pencil, FolderK
 import Linkify from "../../components/Linkify";
 import Sidebar from "../../components/Sidebar/Sidebar";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import { billingApi, API } from "../ProjectBilling/billingMeta";
 import { T, fd, fdw, initials, waPhone, copy } from "../SeoTeam/seoUtil";
 import DateDMY from "../../components/DateDMY";
@@ -322,7 +323,7 @@ function People({ A }) {
 function ProjectChecks({ list, value, onChange }) {
   const [q, setQ] = useState("");
   const all = [...(list?.mine || []), ...(list?.others || [])];
-  const shown = all.filter(p => !q || p.name.toLowerCase().includes(q.toLowerCase()))
+  const shown = all.filter(p => matchesSearch(q, p.name, p.stage))
     .sort((x, y) => Number(value.includes(y.id)) - Number(value.includes(x.id)));
   const flip = (id) => onChange(value.includes(id) ? value.filter(x => x !== id) : [...value, id]);
   return (
@@ -641,7 +642,7 @@ function PersonWork({ a, work, loading, period, onClose, range, since }) {
     return { name, W, B, K, assigned: !!on, stage: on?.stage || "", hrs: W.reduce((s, w) => s + (w.hrs || 0), 0), last: W.map(w => w.date).sort().pop() || "",
       bOpen: B.filter(b => !bugDone(b.status)).length, bDone: B.filter(b => bugDone(b.status)).length, kOpen: K.filter(t => t.status !== "done").length };
   }).sort((x, y) => (y.hrs - x.hrs) || (y.bOpen - x.bOpen) || x.name.localeCompare(y.name));
-  const PF = projects.filter(p => (!pq || p.name.toLowerCase().includes(pq.toLowerCase()))
+  const PF = projects.filter(p => matchesSearch(pq, p.name, p.stage)
     && (pf === "all" || (pf === "worked" && p.W.length) || (pf === "bugs" && p.bOpen) || (pf === "tasks" && p.kOpen) || (pf === "idle" && !p.W.length)));
   const pcur = Math.min(pg, Math.max(0, Math.ceil(PF.length / pper) - 1)), pshown = PF.slice(pcur * pper, pcur * pper + pper);
   const openBugs = bugsAll.filter(b => !bugDone(b.status)).length, openTasks = o.tasks.filter(t => t.status !== "done").length;
@@ -755,7 +756,7 @@ function AssignTask({ accounts, init, onClose, onDone }) {
     ev.preventDefault(); const f = Object.fromEntries(new FormData(ev.target));
     const ref = f.refId === "__other" ? "" : f.refId || "";
     setBusy(true);
-    try { await papi("/tasks", { method: "POST", body: { account: f.account, title: f.title.trim(), refId: ref, refName: (f.refName || "").trim(), due: f.due } }); toast.success("Task assigned"); onDone(); }
+    try { await papi("/tasks", { method: "POST", body: { account: f.account, title: f.title.trim(), refId: ref, refName: (f.refName || "").trim(), due: f.due, priority: f.priority } }); toast.success("Task assigned"); onDone(); }
     catch (ex) { toast.error(ex.message); }
     finally { setBusy(false); }
   };
@@ -769,6 +770,7 @@ function AssignTask({ accounts, init, onClose, onDone }) {
           <ProjectPick key={who} who={who} loading={Pj.loading} list={Pj.data} />
           <label className="f"><span className="flabel">Due</span><input name="due" type="date" required defaultValue={T(0)} min={T(0)} /></label>
         </div>
+        <label className="f"><span className="flabel">Priority</span><select name="priority" defaultValue="Medium">{PRI.map(p => <option key={p}>{p}</option>)}</select></label>
         <div className="ep-row"><button className="btn pri" disabled={busy}>{busy ? "Saving…" : "Assign"}</button></div>
       </form>
     </Modal>
@@ -795,26 +797,41 @@ function ProjectPick({ who, loading, list }) {
 }
 
 /* ───────── Tasks ───────── */
+const PRI = ["High", "Medium", "Low"];
+const priCls = (p) => (p === "High" ? "p-red" : p === "Low" ? "p-other" : "p-amb");
 function Tasks({ accounts, since }) {
   const Tk = useGet("/tasks");
   const [f, setF] = useState("open");
+  const [pf, setPf] = useState("");
+  const [q, setQ] = useState("");
   const [assign, setAssign] = useState(false);
-  const L = (Tk.data || []).filter(t => (f === "open" ? t.status !== "done" : t.status === "done"));
+  const words = q.toLowerCase().split(/\s+/).filter(Boolean);
+  const L = (Tk.data || []).filter(t => (f === "open" ? t.status !== "done" : t.status === "done") && (!pf || (t.priority || "Medium") === pf)
+    && words.every(w => `${t.title} ${t.account?.name || ""} ${t.refName || ""} ${t.from || ""} ${t.priority || "Medium"}`.toLowerCase().includes(w)));
+  const setPri = async (t, priority) => {
+    try { await papi(`/tasks/${t._id}`, { method: "PATCH", body: { priority } }); toast.success(`Priority: ${priority}`); Tk.reload(); }
+    catch (ex) { toast.error(ex.message); }
+  };
   return (
     <>
       <div className="filters">
         <button type="button" className={`chip ${f === "open" ? "on" : ""}`} onClick={() => setF("open")}>Open</button>
         <button type="button" className={`chip ${f === "done" ? "on" : ""}`} onClick={() => setF("done")}>Done</button>
+        <select value={pf} onChange={e => setPf(e.target.value)} aria-label="Priority"><option value="">All priorities</option>{PRI.map(p => <option key={p}>{p}</option>)}</select>
+        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search task, employee or project" aria-label="Search tasks" style={{ minWidth: 240 }} />
         <span className="sp" />
         <button type="button" className="btn pri" onClick={() => setAssign(true)}>Assign a task</button>
       </div>
       <div className="card"><h3>Tasks assigned from the CRM <small>{L.length}</small></h3>
-        <div className="tw"><table><thead><tr><th>Task</th><th>Employee</th><th>Client or project</th><th>Due</th><th>Status</th><th>By</th></tr></thead>
-          <tbody>{Tk.loading ? <tr><td colSpan={6}><div className="empty">Loading…</div></td></tr> : L.length ? L.map(t => (
-            <tr key={t._id} className={isNew(since, t.updatedAt) && t.status !== "todo" ? "ep-new-row" : ""}><td>{isNew(since, t.updatedAt) && t.status !== "todo" && <><NewPill /> </>}<b>{t.title}</b></td><td>{t.account?.name || "-"}</td><td>{t.refName || "-"}</td><td>{fd(t.due)}</td>
+        <div className="tw"><table><thead><tr><th>Task</th><th>Priority</th><th>Employee</th><th>Client or project</th><th>Due</th><th>Status</th><th>By</th></tr></thead>
+          <tbody>{Tk.loading ? <tr><td colSpan={7}><div className="empty">Loading…</div></td></tr> : L.length ? L.map(t => (
+            <tr key={t._id} className={isNew(since, t.updatedAt) && t.status !== "todo" ? "ep-new-row" : ""}><td>{isNew(since, t.updatedAt) && t.status !== "todo" && <><NewPill /> </>}<b>{t.title}</b></td>
+              <td>{t.status === "done" ? <span className={`pill ${priCls(t.priority)}`}>{t.priority || "Medium"}</span>
+                : <select className={`pri-sel ${priCls(t.priority)}`} value={t.priority || "Medium"} onChange={e => setPri(t, e.target.value)} aria-label={`Priority of ${t.title}`}>{PRI.map(p => <option key={p}>{p}</option>)}</select>}</td>
+              <td>{t.account?.name || "-"}</td><td>{t.refName || "-"}</td><td>{fd(t.due)}</td>
               <td>{t.status === "done" ? <span className="pill p-ok">Done {t.doneOn ? fd(t.doneOn) : ""}</span> : t.due < T(0) ? <span className="pill p-red">Overdue</span> : t.status === "doing" ? <span className="pill p-blue">Doing</span> : <span className="pill p-other">To do</span>}</td>
               <td>{t.from}</td></tr>
-          )) : <tr><td colSpan={6}><div className="empty">No tasks here.</div></td></tr>}</tbody></table></div></div>
+          )) : <tr><td colSpan={7}><div className="empty">No tasks here.</div></td></tr>}</tbody></table></div></div>
       {assign && <AssignTask accounts={accounts.filter(a => a.status === "active")} init={{}} onClose={() => setAssign(false)} onDone={() => { setAssign(false); Tk.reload(); }} />}
     </>
   );
@@ -828,9 +845,9 @@ function Plans({ accounts, since }) {
   const [q, setQ] = useState("");
   const D = useGet(`/plans?date=${date}`);
   const inTeam = (a) => team === "all" || anyRole(a, TEAMS[team][1]);
-  const match = (a) => !q.trim() || String(a?.name || "").toLowerCase().includes(q.trim().toLowerCase());
+  const match = (a, ...more) => matchesSearch(q, a?.name, roleNames(a), a?.branch, more);
   const withItems = (D.data?.plans || []).filter(p => p.items.length);
-  const shown = withItems.filter(p => inTeam(p.account) && match(p.account));
+  const shown = withItems.filter(p => inTeam(p.account) && match(p.account, p.items.map(i => [i.text, i.refName])));
   const has = new Set(withItems.map(p => String(p.account._id)));
   const missing = accounts.filter(a => a.status === "active" && !has.has(a.id) && inTeam(a) && match(a));
   const items = shown.flatMap(p => p.items), done = items.filter(i => i.done).length;
@@ -848,7 +865,7 @@ function Plans({ accounts, since }) {
         <label>Day <input type="date" value={date} max={T(0)} onChange={e => e.target.value && setDate(e.target.value)} /></label>
         {!isToday && <button type="button" className="btn sm" onClick={() => setDate(T(0))}>Today</button>}
         {Object.entries(TEAMS).map(([k, [t]]) => <button key={k} type="button" className={`chip ${team === k ? "on" : ""}`} onClick={() => setTeam(k)}>{t}</button>)}
-        <input type="search" placeholder="Search employee" value={q} onChange={e => setQ(e.target.value)} aria-label="Search employee" />
+        <input type="search" placeholder="Search employee or plan" value={q} onChange={e => setQ(e.target.value)} aria-label="Search employee" />
       </div>
       {D.loading ? <div className="card"><div className="empty">Loading…</div></div>
         : D.err ? <div className="card"><div className="empty err">{D.err}</div></div> : (
@@ -932,7 +949,7 @@ function SharedDocs({ since }) {
   const D = useGet("/docs");
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(null);
-  const L = (D.data || []).filter(d => !q || `${d.title} ${d.refName} ${d.fromName} ${d.toName} ${d.text}`.toLowerCase().includes(q.toLowerCase()));
+  const L = (D.data || []).filter(d => matchesSearch(q, d.title, d.refName, d.fromName, d.toName, d.text, (d.files || []).map(f => f.name)));
   const tm = (d) => new Date(d).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
   const href = (u) => (/^https?:/.test(u) ? u : `${API}${u}`);
   const all = D.data || [];
@@ -991,8 +1008,7 @@ function Meetings({ since }) {
     if (fl.mom && momOf(m) !== fl.mom) return false;
     if (fl.from && d < fl.from) return false;
     if (fl.to && d > fl.to) return false;
-    const q = fl.q.trim().toLowerCase();
-    return !q || [m.title, m.refName, m.account?.name, m.mode].some(v => String(v || "").toLowerCase().includes(q));
+    return matchesSearch(fl.q, m.title, m.refName, m.account?.name, m.mode, m.notes, m.momTxt);
   });
   const pages = Math.max(1, Math.ceil(L.length / per)), cur = Math.min(page, pages - 1);
   const shown = L.slice(cur * per, cur * per + per);

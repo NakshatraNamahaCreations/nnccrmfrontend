@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Cell } from "recharts";
 import Sidebar from "../../components/Sidebar/Sidebar";
+import { matchesSearch } from "../../utils/search";
 import "./Leaderboard.css";
 
 const API = import.meta.env.VITE_API_BASE_URL || "http://localhost:5000";
@@ -124,10 +125,7 @@ function Table({ rows, search }) {
     else { setSortKey(k); setSortDir("desc"); }
   };
 
-  const q = search.trim().toLowerCase();
-  const filtered = rows.filter(r =>
-    !q || r.rep.toLowerCase().includes(q) || r.branch.toLowerCase().includes(q)
-  );
+  const filtered = rows.filter(r => matchesSearch(search, r.rep, r.branch));
 
   const sorted = [...filtered].sort((a,b) => {
     let va = a[sortKey], vb = b[sortKey];

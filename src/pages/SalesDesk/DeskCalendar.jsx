@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { toast } from "../../utils/toast";
+import { matchesSearch } from "../../utils/search";
 import { billingApi } from "../ProjectBilling/billingMeta";
 import { DAY, startOfDay, daysFrom, ymd, fds, fdw, ampm, toMin } from "./deskData";
 
@@ -135,8 +136,7 @@ export function MeetingModal({ ev, presetClientId, clients, onClose, onSaved, on
   const set = (k) => (e) => setF(s => ({ ...s, [k]: e.target.value }));
   const client = clients.find(c => c.id === clientId) || null;
   const options = useMemo(() => {
-    const s = find.trim().toLowerCase();
-    const L = clients.filter(c => c.src !== "event" && (!s || [c.name, c.company, c.phone, c.project].some(v => String(v || "").toLowerCase().includes(s))));
+    const L = clients.filter(c => c.src !== "event" && matchesSearch(find, c.name, c.company, c.phone, c.project, c.email));
     return L.slice(0, 200);
   }, [clients, find]);
   // Picking a client also fills in their email if it is still empty
