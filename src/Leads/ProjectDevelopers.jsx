@@ -46,7 +46,8 @@ export default function ProjectDevelopers({ lead }) {
     finally { setSaving(false); }
   };
 
-  const options = (all || []).filter(d => d.isActive || picked.includes(d._id));
+  // inactive people (or an inactive Employee Portal login) are not offered; someone already on the project stays ticked
+  const options = (all || []).filter(d => (d.isActive && d.portal?.status !== "disabled") || picked.includes(d._id));
 
   return (
     <div className="pdev">
